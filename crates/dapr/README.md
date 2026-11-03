@@ -1,0 +1,35 @@
+# omnia-dapr
+
+Dapr HTTP v1.0 sidecar provider and CloudEvents 1.0 subscription bridge for
+[Omnia](https://github.com/augentic/omnia) handlers.
+
+`Dapr<H>` implements the `omnia_sdk` capability traits that Dapr's HTTP v1.0
+building blocks support (`StateStore`, `Publish`, `Config`, and basic
+`BlobStore` object operations) over any `H: HttpRequest`. Because it is
+generic over `HttpRequest`, the same provider runs in a native binary over
+`Direct<HttpDefault>` and inside a `wasm32-wasip2` guest over `WasiProvider`.
+
+## Capabilities and contract deviations
+
+| Trait | Dapr building block | Notes |
+| --- | --- | --- |
+| `StateStore` | State API (`/v1.0/state/{store}`) | Raw bytes are base64-encoded in the JSON state item so binary payloads and 8-byte big-endian counters round-trip intact. `set` sends `metadata.ttlInSeconds` in one round trip. `cas` reads the current value and `ETag`, then issues a `first-write` conditional `POST` re-supplying any remaining TTL. **Deviation:** `increment` uses a bounded CAS retry loop over an 8-byte big-endian `i64` because Dapr has no atomic counter API. |
+| `Publish` | Pub/Sub API (`/v1.0/publish/{pubsub}/{topic}`) | Payload is sent as the request body; `Message::headers` map to `metadata.*` query parameters. |
+| `Config` | Configuration API (`/v1.0/configuration/{store}`) | Optional process-environment fallback for local runs. |
+| `BlobStore` (partial) | Output bindings (`/v1.0/bindings/{container}`) | Serves `get`, `put`, `delete`, and `list`; `get_range`, `object_info`, and container operations return `Unsupported`. |
+
+Capabilities outside Dapr's building blocks (`TableStore`, `DocumentStore`,
+`Identity`, `Vault`, `Broadcast`, `Model`, `Vcs`) are served alongside
+`Dapr<H>` by `omnia_native::Direct<T>` fields on a `#[derive(omnia_sdk::Provider)]`
+struct.
+
+## Inbound subscriptions
+
+`omnia_dapr::axum::subscriptions(router, &dapr)` builds an `axum::Router`
+serving:
+
+- `GET /dapr/subscribe` — lists every topic from `router.topics()`.
+- `POST /dapr/events/{*topic}` — decodes structured or binary CloudEvents 1.0
+  into an `omnia_sdk::api::messaging::Delivery`, dispatches it through
+  `router.handle`, and returns Dapr's `{"status": "SUCCESS" | "RETRY" | "DROP"}`
+  acknowledgement.

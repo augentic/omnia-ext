@@ -66,7 +66,7 @@ impl<H: HttpRequest, S: StateStore> HttpCache<H, S> {
     async fn write_entry(&self, etag: &str, response: &Response<Bytes>, max_age: u64) {
         tracing::debug!("caching response for etag `{etag}`");
         let written = match serialize(response) {
-            Ok(bytes) => self.store.set(etag, &bytes, Some(max_age)).await.map(drop),
+            Ok(bytes) => self.store.set(etag, &bytes, Some(max_age)).await,
             Err(e) => Err(e),
         };
         if let Err(e) = written {

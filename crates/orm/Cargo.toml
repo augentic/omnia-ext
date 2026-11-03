@@ -18,7 +18,7 @@ workspace = true
 [dependencies]
 anyhow.workspace = true
 chrono.workspace = true
-omnia-wasi-sql.workspace = true
+omnia-sdk = { workspace = true, features = ["sql"] }
 sea-query.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
@@ -28,5 +28,4 @@ tokio = { workspace = true, features = ["macros", "rt"] }
 
 # Target-gated so the guest's wasm32 dependency graph never sees the doubles.
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-omnia-sdk = { workspace = true, features = ["sql"] }
 omnia-test = { workspace = true, features = ["guest"] }

@@ -155,14 +155,10 @@ async fn cached_miss_then_hit() {
     assert!(hits[0].headers.get(IF_NONE_MATCH).is_none(), "If-None-Match is not forwarded");
 
     // Persisted state: the bucket the guest's `StateStore` opens holds the
-    // response under the raw etag, wrapped in the keyvalue `Cacheable`
-    // envelope (`{"value": [bytes], "expires_at": secs}`) that carries the
-    // `max-age` TTL.
+    // serialized response directly under the raw etag, with TTL enforced
+    // natively by the bucket.
     let entry = backends.state(ETAG_V1).await.expect("the response is stored under the etag");
-    let envelope: Value = serde_json::from_slice(&entry).expect("Cacheable JSON");
-    assert!(envelope["expires_at"].is_number(), "the TTL travels in the envelope");
-    let cached: Value =
-        serde_json::from_slice(&bytes(&envelope["value"])).expect("serialized response");
+    let cached: Value = serde_json::from_slice(&entry).expect("serialized response");
     assert_eq!(cached["status"], 200);
     assert_eq!(bytes(&cached["body"]), BODY);
 
