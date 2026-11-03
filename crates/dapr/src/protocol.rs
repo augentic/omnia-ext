@@ -1,5 +1,7 @@
 //! Pure HTTP request builders and response parsers for the Dapr v1.0 sidecar API.
 
+use std::fmt::Write as _;
+
 use anyhow::{Context as _, Result, anyhow, bail};
 use base64ct::{Base64, Encoding as _};
 use bytes::Bytes;
@@ -87,10 +89,9 @@ pub fn parse_state_get(response: &Response<Bytes>) -> Result<Option<StateEntry>>
                 .filter(|s| !s.is_empty());
             Ok(Some(StateEntry { value, etag }))
         }
-        status => bail!(
-            "Dapr state GET failed ({status}): {}",
-            String::from_utf8_lossy(response.body())
-        ),
+        status => {
+            bail!("Dapr state GET failed ({status}): {}", String::from_utf8_lossy(response.body()))
+        }
     }
 }
 
@@ -117,8 +118,7 @@ pub fn state_set_request(
 }
 
 pub fn state_cas_request(
-    endpoint: &str, store: &str, key: &str, value: &[u8], etag: Option<&str>,
-    ttl_secs: Option<u64>,
+    endpoint: &str, store: &str, key: &str, value: &[u8], etag: Option<&str>, ttl_secs: Option<u64>,
 ) -> Result<Request<Full<Bytes>>> {
     let url = format!("{}/v1.0/state/{}", trim_slash(endpoint), encode(store));
     let item = StateWriteItem {
@@ -151,10 +151,9 @@ pub fn parse_state_cas(response: &Response<Bytes>) -> Result<CasOutcome> {
     match response.status() {
         status if status.is_success() => Ok(CasOutcome::Committed),
         StatusCode::CONFLICT | StatusCode::PRECONDITION_FAILED => Ok(CasOutcome::Conflict),
-        status => bail!(
-            "Dapr state CAS failed ({status}): {}",
-            String::from_utf8_lossy(response.body())
-        ),
+        status => {
+            bail!("Dapr state CAS failed ({status}): {}", String::from_utf8_lossy(response.body()))
+        }
     }
 }
 
@@ -174,10 +173,7 @@ pub fn ensure_success(op: &str, response: &Response<Bytes>, allow_not_found: boo
     if status.is_success() || (allow_not_found && status == StatusCode::NOT_FOUND) {
         return Ok(());
     }
-    bail!(
-        "Dapr {op} failed ({status}): {}",
-        String::from_utf8_lossy(response.body())
-    )
+    bail!("Dapr {op} failed ({status}): {}", String::from_utf8_lossy(response.body()))
 }
 
 // --- Pub/Sub API ---
@@ -190,12 +186,8 @@ pub fn publish_request<'a>(
         headers.into_iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
     pairs.sort_unstable_by_key(|(k, _)| *k);
 
-    let mut url = format!(
-        "{}/v1.0/publish/{}/{}",
-        trim_slash(endpoint),
-        encode(pubsub),
-        encode_topic(topic)
-    );
+    let mut url =
+        format!("{}/v1.0/publish/{}/{}", trim_slash(endpoint), encode(pubsub), encode_topic(topic));
     if !pairs.is_empty() {
         let query: Vec<String> = pairs
             .into_iter()
@@ -276,10 +268,7 @@ pub fn binding_request(
     let payload = BindingRequest {
         operation,
         data: data.map(encode_bytes),
-        metadata: key.map(|k| BindingMetadata {
-            key: k,
-            blob_name: k,
-        }),
+        metadata: key.map(|k| BindingMetadata { key: k, blob_name: k }),
     };
     let body = serde_json::to_vec(&payload).context("serializing Dapr binding request")?;
     Request::builder()
@@ -310,10 +299,7 @@ pub fn parse_binding_get(response: &Response<Bytes>) -> Result<Option<Vec<u8>>> 
 pub fn parse_binding_list(response: &Response<Bytes>) -> Result<Vec<String>> {
     let status = response.status();
     if !status.is_success() {
-        bail!(
-            "Dapr binding list failed ({status}): {}",
-            String::from_utf8_lossy(response.body())
-        );
+        bail!("Dapr binding list failed ({status}): {}", String::from_utf8_lossy(response.body()));
     }
     let value: Value =
         serde_json::from_slice(response.body()).context("parsing Dapr binding list JSON")?;
@@ -363,7 +349,7 @@ fn encode(segment: &str) -> String {
         if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'~') {
             out.push(char::from(byte));
         } else {
-            out.push_str(&format!("%{byte:02X}"));
+            let _ = write!(out, "%{byte:02X}");
         }
     }
     out
@@ -410,10 +396,7 @@ mod tests {
 
     #[test]
     fn state_get_responses() {
-        let empty = Response::builder()
-            .status(StatusCode::NO_CONTENT)
-            .body(Bytes::new())
-            .unwrap();
+        let empty = Response::builder().status(StatusCode::NO_CONTENT).body(Bytes::new()).unwrap();
         assert_eq!(parse_state_get(&empty).unwrap(), None);
 
         let body = Bytes::from(serde_json::to_vec(&encode_bytes(&[0x00, 0xff])).unwrap());

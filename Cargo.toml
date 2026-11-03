@@ -75,33 +75,6 @@ omnia-dapr = { path = "crates/dapr", version = "0.36.0" }
 omnia-http-cache = { path = "crates/http-cache", version = "0.36.0" }
 omnia-orm = { path = "crates/orm", version = "0.36.0" }
 
-[patch.crates-io]
-omnia = { path = "../omnia/crates/omnia" }
-omnia-backend = { path = "../omnia/crates/omnia-backend" }
-omnia-cli = { path = "../omnia/crates/omnia-cli" }
-omnia-compile = { path = "../omnia/crates/omnia-compile" }
-omnia-core = { path = "../omnia/crates/omnia-core" }
-omnia-guest-macros = { path = "../omnia/crates/guest-macros" }
-omnia-host-macros = { path = "../omnia/crates/host-macros" }
-omnia-link = { path = "../omnia/crates/omnia-link" }
-omnia-native = { path = "../omnia/crates/omnia-native" }
-omnia-plugin = { path = "../omnia/crates/omnia-plugin" }
-omnia-sdk = { path = "../omnia/crates/omnia-sdk" }
-omnia-test = { path = "../omnia/crates/omnia-test" }
-omnia-wasi-blobstore = { path = "../omnia/crates/wasi-blobstore" }
-omnia-wasi-config = { path = "../omnia/crates/wasi-config" }
-omnia-wasi-docstore = { path = "../omnia/crates/wasi-docstore" }
-omnia-wasi-http = { path = "../omnia/crates/wasi-http" }
-omnia-wasi-identity = { path = "../omnia/crates/wasi-identity" }
-omnia-wasi-keyvalue = { path = "../omnia/crates/wasi-keyvalue" }
-omnia-wasi-messaging = { path = "../omnia/crates/wasi-messaging" }
-omnia-wasi-model = { path = "../omnia/crates/wasi-model" }
-omnia-wasi-otel = { path = "../omnia/crates/wasi-otel" }
-omnia-wasi-sql = { path = "../omnia/crates/wasi-sql" }
-omnia-wasi-vault = { path = "../omnia/crates/wasi-vault" }
-omnia-wasi-vcs = { path = "../omnia/crates/wasi-vcs" }
-omnia-wasi-websocket = { path = "../omnia/crates/wasi-websocket" }
-
 [profile.release]
 lto = true
 opt-level = "s"

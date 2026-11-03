@@ -1,4 +1,4 @@
-//! CloudEvents 1.0 HTTP request decoder (structured and binary content modes).
+//! `CloudEvents` 1.0 HTTP request decoder (structured and binary content modes).
 
 use base64ct::{Base64, Encoding as _};
 use http::HeaderMap;
@@ -6,10 +6,10 @@ use http::header::CONTENT_TYPE;
 use omnia_sdk::api::messaging::Delivery;
 use serde_json::Value;
 
-/// Errors returned when decoding an inbound CloudEvents 1.0 HTTP request.
+/// Errors returned when decoding an inbound `CloudEvents` 1.0 HTTP request.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum DecodeError {
-    /// Structured CloudEvents body is not valid JSON or not a JSON object.
+    /// Structured `CloudEvents` body is not valid JSON or not a JSON object.
     #[error("invalid structured CloudEvents JSON: {0}")]
     InvalidJson(String),
     /// `data_base64` field is not valid base64.
@@ -18,7 +18,7 @@ pub enum DecodeError {
 }
 
 /// Decodes a structured (`application/cloudevents+json`) or binary (`ce-*`
-/// headers) CloudEvents 1.0 HTTP request into a [`Delivery`].
+/// headers) `CloudEvents` 1.0 HTTP request into a [`Delivery`].
 ///
 /// When `route_topic` is supplied (for example, extracted from the
 /// `/dapr/events/{*topic}` path parameter), it takes precedence over the
@@ -27,13 +27,12 @@ pub enum DecodeError {
 ///
 /// # Errors
 ///
-/// Returns [`DecodeError`] if a structured CloudEvents body is malformed JSON
+/// Returns [`DecodeError`] if a structured `CloudEvents` body is malformed JSON
 /// or contains invalid `data_base64`.
 pub fn decode(
     headers: &HeaderMap, body: &[u8], route_topic: Option<&str>,
 ) -> Result<Delivery, DecodeError> {
-    let content_type =
-        headers.get(CONTENT_TYPE).and_then(|v| v.to_str().ok()).unwrap_or_default();
+    let content_type = headers.get(CONTENT_TYPE).and_then(|v| v.to_str().ok()).unwrap_or_default();
 
     if is_structured(content_type) {
         decode_structured(body, route_topic)
@@ -55,9 +54,7 @@ fn decode_structured(body: &[u8], route_topic: Option<&str>) -> Result<Delivery,
     };
 
     let content_type = obj.get("datacontenttype").and_then(Value::as_str).map(str::to_owned);
-    let is_json_data = content_type
-        .as_deref()
-        .is_none_or(|ct| ct.contains("json"));
+    let is_json_data = content_type.as_deref().is_none_or(|ct| ct.contains("json"));
 
     let payload = if let Some(b64) = obj.get("data_base64").and_then(Value::as_str) {
         Base64::decode_vec(b64).map_err(|e| DecodeError::InvalidBase64(e.to_string()))?
@@ -65,8 +62,9 @@ fn decode_structured(body: &[u8], route_topic: Option<&str>) -> Result<Delivery,
         match data {
             Value::Null => Vec::new(),
             Value::String(s) if !is_json_data => s.as_bytes().to_vec(),
-            other => serde_json::to_vec(other)
-                .map_err(|e| DecodeError::InvalidJson(e.to_string()))?,
+            other => {
+                serde_json::to_vec(other).map_err(|e| DecodeError::InvalidJson(e.to_string()))?
+            }
         }
     } else {
         Vec::new()

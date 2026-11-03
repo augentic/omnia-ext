@@ -1,6 +1,6 @@
 # omnia-dapr
 
-Dapr HTTP v1.0 sidecar provider and CloudEvents 1.0 subscription bridge for
+Dapr HTTP v1.0 sidecar provider and `CloudEvents` 1.0 subscription bridge for
 [Omnia](https://github.com/augentic/omnia) handlers.
 
 `Dapr<H>` implements the `omnia_sdk` capability traits that Dapr's HTTP v1.0
@@ -29,7 +29,7 @@ struct.
 serving:
 
 - `GET /dapr/subscribe` — lists every topic from `router.topics()`.
-- `POST /dapr/events/{*topic}` — decodes structured or binary CloudEvents 1.0
+- `POST /dapr/events/{*topic}` — decodes structured or binary `CloudEvents` 1.0
   into an `omnia_sdk::api::messaging::Delivery`, dispatches it through
   `router.handle`, and returns Dapr's `{"status": "SUCCESS" | "RETRY" | "DROP"}`
   acknowledgement.

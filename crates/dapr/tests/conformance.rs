@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use axum::extract::{Path, RawQuery, State};
 use axum::routing::{get, post};
@@ -25,6 +25,7 @@ use omnia_test::conformance;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio::net::TcpListener;
+use tokio::time::Instant;
 use tower::ServiceExt as _;
 
 omnia_test::conformance!(state, publish, config);
@@ -63,7 +64,7 @@ struct StateWrite {
     key: String,
     value: Value,
     etag: Option<String>,
-    metadata: Option< HashMap<String, String>>,
+    metadata: Option<HashMap<String, String>>,
     options: Option<WriteOptions>,
 }
 
@@ -134,8 +135,11 @@ async fn state_get(
 ) -> Response<Full<Bytes>> {
     let key = key.trim_start_matches('/');
     let scoped = format!("{store}||{key}");
-    let mut guard = sidecar.inner.lock().expect("sidecar lock");
-    let Some(item) = live_entry(&mut guard.state, &scoped).cloned() else {
+    let item = {
+        let mut guard = sidecar.inner.lock().expect("sidecar lock");
+        live_entry(&mut guard.state, &scoped).cloned()
+    };
+    let Some(item) = item else {
         return Response::builder()
             .status(StatusCode::NO_CONTENT)
             .body(Full::new(Bytes::new()))
@@ -151,16 +155,14 @@ async fn state_get(
 }
 
 async fn state_post(
-    State(sidecar): State<FakeSidecar>, Path(store): Path<String>, Json(items): Json<Vec<StateWrite>>,
+    State(sidecar): State<FakeSidecar>, Path(store): Path<String>,
+    Json(items): Json<Vec<StateWrite>>,
 ) -> StatusCode {
     let mut guard = sidecar.inner.lock().expect("sidecar lock");
     for item in items {
         let scoped = format!("{store}||{}", item.key);
-        let first_write = item
-            .options
-            .as_ref()
-            .and_then(|o| o.concurrency.as_deref())
-            == Some("first-write");
+        let first_write =
+            item.options.as_ref().and_then(|o| o.concurrency.as_deref()) == Some("first-write");
 
         if first_write {
             let current_etag = live_entry(&mut guard.state, &scoped).map(|e| e.etag.clone());
@@ -218,23 +220,19 @@ async fn publish_post(
 async fn config_get_route(
     State(sidecar): State<FakeSidecar>, Path(_store): Path<String>, RawQuery(query): RawQuery,
 ) -> Json<Value> {
-    let key = query
-        .as_deref()
-        .and_then(|q| q.strip_prefix("key="))
-        .unwrap_or_default();
-    let guard = sidecar.inner.lock().expect("sidecar lock");
+    let key = query.as_deref().and_then(|q| q.strip_prefix("key=")).unwrap_or_default();
+    let val = sidecar.inner.lock().expect("sidecar lock").config.get(key).cloned();
     let mut map = serde_json::Map::new();
-    if let Some(val) = guard.config.get(key) {
+    if let Some(val) = val {
         map.insert(key.to_owned(), json!({ "value": val }));
     }
     Json(Value::Object(map))
 }
 
 async fn binding_post(
-    State(sidecar): State<FakeSidecar>, Path(container): Path<String>, Json(call): Json<BindingCall>,
+    State(sidecar): State<FakeSidecar>, Path(container): Path<String>,
+    Json(call): Json<BindingCall>,
 ) -> Response<Full<Bytes>> {
-    let mut guard = sidecar.inner.lock().expect("sidecar lock");
-    let bucket = guard.blobs.entry(container).or_default();
     let key = call
         .metadata
         .as_ref()
@@ -242,47 +240,37 @@ async fn binding_post(
         .cloned()
         .unwrap_or_default();
 
-    match call.operation.as_str() {
-        "create" => {
-            bucket.insert(key, call.data.unwrap_or_default());
-            Response::builder()
-                .status(StatusCode::OK)
-                .body(Full::new(Bytes::new()))
-                .expect("response")
-        }
-        "get" => match bucket.get(&key) {
-            Some(encoded) => {
-                let body = serde_json::to_vec(encoded).expect("serialize blob");
-                Response::builder()
-                    .status(StatusCode::OK)
-                    .body(Full::new(Bytes::from(body)))
-                    .expect("response")
+    let (status, body) = {
+        let mut guard = sidecar.inner.lock().expect("sidecar lock");
+        let bucket = guard.blobs.entry(container).or_default();
+        let out = match call.operation.as_str() {
+            "create" => {
+                bucket.insert(key, call.data.unwrap_or_default());
+                (StatusCode::OK, Bytes::new())
             }
-            None => Response::builder()
-                .status(StatusCode::NOT_FOUND)
-                .body(Full::new(Bytes::new()))
-                .expect("response"),
-        },
-        "delete" => {
-            bucket.remove(&key);
-            Response::builder()
-                .status(StatusCode::NO_CONTENT)
-                .body(Full::new(Bytes::new()))
-                .expect("response")
-        }
-        "list" => {
-            let names: Vec<String> = bucket.keys().cloned().collect();
-            let body = serde_json::to_vec(&names).expect("serialize list");
-            Response::builder()
-                .status(StatusCode::OK)
-                .body(Full::new(Bytes::from(body)))
-                .expect("response")
-        }
-        _ => Response::builder()
-            .status(StatusCode::BAD_REQUEST)
-            .body(Full::new(Bytes::from_static(b"unknown operation")))
-            .expect("response"),
-    }
+            "get" => bucket.get(&key).map_or_else(
+                || (StatusCode::NOT_FOUND, Bytes::new()),
+                |encoded| {
+                    let body = serde_json::to_vec(encoded).expect("serialize blob");
+                    (StatusCode::OK, Bytes::from(body))
+                },
+            ),
+            "delete" => {
+                bucket.remove(&key);
+                (StatusCode::NO_CONTENT, Bytes::new())
+            }
+            "list" => {
+                let names: Vec<String> = bucket.keys().cloned().collect();
+                let body = serde_json::to_vec(&names).expect("serialize list");
+                (StatusCode::OK, Bytes::from(body))
+            }
+            _ => (StatusCode::BAD_REQUEST, Bytes::from_static(b"unknown operation")),
+        };
+        drop(guard);
+        out
+    };
+
+    Response::builder().status(status).body(Full::new(body)).expect("response")
 }
 
 #[tokio::test]
@@ -402,12 +390,8 @@ struct AppProvider {
     dapr: Dapr<Direct<HttpDefault>>,
 }
 
-#[tokio::test]
-async fn subscriptions_cloudevents_bridge() {
-    let (_sidecar, dapr) = FakeSidecar::serve().await;
-    let provider = AppProvider { dapr: dapr.clone() };
-
-    let messaging = MessagingRouter::new(Client::new("dapr-app", provider.clone()))
+fn dapr_messaging_router(provider: AppProvider) -> MessagingRouter<AppProvider> {
+    MessagingRouter::new(Client::new("dapr-app", provider))
         .route(
             "orders.created",
             consume(|order: String, cx: Context<AppProvider>| async move {
@@ -428,24 +412,28 @@ async fn subscriptions_cloudevents_bridge() {
                     .map_err(Error::from)?;
                 Ok::<_, Error>(())
             }),
-        );
+        )
+}
 
+async fn send_json(app: &Router, req: Request<axum::body::Body>) -> Value {
+    let resp = app.clone().oneshot(req).await.expect("oneshot response");
+    assert_eq!(resp.status(), StatusCode::OK);
+    let bytes = resp.into_body().collect().await.expect("body").to_bytes();
+    serde_json::from_slice(&bytes).expect("json")
+}
+
+#[tokio::test]
+async fn subscriptions_cloudevents_bridge() {
+    let (_sidecar, dapr) = FakeSidecar::serve().await;
+    let messaging = dapr_messaging_router(AppProvider { dapr: dapr.clone() });
     let app = subscriptions(messaging, &dapr);
 
     // 1. GET /dapr/subscribe lists both topics in registration order.
-    let sub_resp = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .uri("/dapr/subscribe")
-                .body(axum::body::Body::empty())
-                .expect("request"),
-        )
-        .await
-        .expect("subscribe response");
-    assert_eq!(sub_resp.status(), StatusCode::OK);
-    let sub_bytes = sub_resp.into_body().collect().await.expect("body").to_bytes();
-    let subs: Value = serde_json::from_slice(&sub_bytes).expect("json");
+    let subs = send_json(
+        &app,
+        Request::builder().uri("/dapr/subscribe").body(axum::body::Body::empty()).expect("request"),
+    )
+    .await;
     assert_eq!(
         subs,
         json!([
@@ -463,23 +451,16 @@ async fn subscriptions_cloudevents_bridge() {
         "datacontenttype": "application/json",
         "data": "ord-99"
     });
-    let ev_resp = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/dapr/events/orders.created")
-                .header(CONTENT_TYPE, "application/cloudevents+json")
-                .body(axum::body::Body::from(structured.to_string()))
-                .expect("request"),
-        )
-        .await
-        .expect("event response");
-    assert_eq!(ev_resp.status(), StatusCode::OK);
-    let ack: Value = serde_json::from_slice(
-        &ev_resp.into_body().collect().await.expect("body").to_bytes(),
+    let ack = send_json(
+        &app,
+        Request::builder()
+            .method("POST")
+            .uri("/dapr/events/orders.created")
+            .header(CONTENT_TYPE, "application/cloudevents+json")
+            .body(axum::body::Body::from(structured.to_string()))
+            .expect("request"),
     )
-    .expect("json");
+    .await;
     assert_eq!(ack, json!({"status": "SUCCESS"}));
     assert_eq!(StateStore::get(&dapr, "orders/last").await.expect("get"), Some(b"ord-99".to_vec()));
 
@@ -496,29 +477,23 @@ async fn subscriptions_cloudevents_bridge() {
         .expect("request");
     *bin_req.headers_mut() = bin_headers;
 
-    let bin_resp = app.clone().oneshot(bin_req).await.expect("binary event response");
-    let bin_ack: Value = serde_json::from_slice(
-        &bin_resp.into_body().collect().await.expect("body").to_bytes(),
-    )
-    .expect("json");
+    let bin_ack = send_json(&app, bin_req).await;
     assert_eq!(bin_ack, json!({"status": "SUCCESS"}));
-    assert_eq!(StateStore::get(&dapr, "iot/last").await.expect("get"), Some(b"21.5C:req-42".to_vec()));
+    assert_eq!(
+        StateStore::get(&dapr, "iot/last").await.expect("get"),
+        Some(b"21.5C:req-42".to_vec())
+    );
 
     // 4. Unhandled topic answers DROP.
-    let drop_resp = app
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/dapr/events/unrouted.topic")
-                .header(CONTENT_TYPE, "application/cloudevents+json")
-                .body(axum::body::Body::from(structured.to_string()))
-                .expect("request"),
-        )
-        .await
-        .expect("drop response");
-    let drop_ack: Value = serde_json::from_slice(
-        &drop_resp.into_body().collect().await.expect("body").to_bytes(),
+    let drop_ack = send_json(
+        &app,
+        Request::builder()
+            .method("POST")
+            .uri("/dapr/events/unrouted.topic")
+            .header(CONTENT_TYPE, "application/cloudevents+json")
+            .body(axum::body::Body::from(structured.to_string()))
+            .expect("request"),
     )
-    .expect("json");
+    .await;
     assert_eq!(drop_ack, json!({"status": "DROP"}));
 }

@@ -5,8 +5,8 @@ pub mod cloudevents;
 mod protocol;
 
 use std::collections::HashMap;
+use std::future::{Future, ready};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
 
 use anyhow::{Context as _, Result, anyhow, bail};
 use omnia_sdk::blobstore::{ContainerMetadata, ObjectMetadata};
@@ -30,7 +30,7 @@ pub struct Dapr<H> {
     pubsub: String,
     config_store: String,
     env_fallback: bool,
-    ttls: Arc<Mutex<HashMap<String, Instant>>>,
+    ttls: Arc<Mutex<HashMap<String, u64>>>,
 }
 
 impl<H> Dapr<H> {
@@ -127,7 +127,7 @@ impl<H> Dapr<H> {
         let mut ttls = self.ttls.lock().expect("ttl map lock");
         match ttl_secs {
             Some(secs) => {
-                ttls.insert(key.to_owned(), Instant::now() + Duration::from_secs(secs));
+                ttls.insert(key.to_owned(), secs);
             }
             None => {
                 ttls.remove(key);
@@ -135,16 +135,8 @@ impl<H> Dapr<H> {
         }
     }
 
-    fn remaining_ttl_secs(&self, key: &str) -> Option<u64> {
-        let mut ttls = self.ttls.lock().expect("ttl map lock");
-        let deadline = ttls.get(key).copied()?;
-        let now = Instant::now();
-        if deadline <= now {
-            ttls.remove(key);
-            None
-        } else {
-            Some(deadline.duration_since(now).as_secs().max(1))
-        }
+    fn tracked_ttl_secs(&self, key: &str) -> Option<u64> {
+        self.ttls.lock().expect("ttl map lock").get(key).copied()
     }
 }
 
@@ -186,9 +178,9 @@ impl<H: HttpRequest> StateStore for Dapr<H> {
             return Err(CasError::Conflict(current.map(|e| e.value)));
         }
 
-        // round trip 2: conditional first-write POST preserving remaining TTL
+        // round trip 2: conditional first-write POST preserving TTL
         let etag = current.as_ref().and_then(|e| e.etag.as_deref());
-        let ttl_secs = self.remaining_ttl_secs(key);
+        let ttl_secs = self.tracked_ttl_secs(key);
         let cas_req = protocol::state_cas_request(
             &self.endpoint,
             &self.state_store,
@@ -282,20 +274,14 @@ impl<H: HttpRequest> BlobStore for Dapr<H> {
     }
 
     async fn put(&self, container: &str, name: &str, data: &[u8]) -> Result<()> {
-        let req = protocol::binding_request(
-            &self.endpoint,
-            container,
-            "create",
-            Some(name),
-            Some(data),
-        )?;
+        let req =
+            protocol::binding_request(&self.endpoint, container, "create", Some(name), Some(data))?;
         let resp = self.http.fetch(req).await?;
         protocol::ensure_success("binding create", &resp, false)
     }
 
     async fn delete(&self, container: &str, name: &str) -> Result<()> {
-        let req =
-            protocol::binding_request(&self.endpoint, container, "delete", Some(name), None)?;
+        let req = protocol::binding_request(&self.endpoint, container, "delete", Some(name), None)?;
         let resp = self.http.fetch(req).await?;
         protocol::ensure_success("binding delete", &resp, true)
     }
@@ -306,29 +292,33 @@ impl<H: HttpRequest> BlobStore for Dapr<H> {
         protocol::parse_binding_list(&resp)
     }
 
-    async fn get_range(
+    fn get_range(
         &self, _container: &str, _name: &str, _start: u64, _end: u64,
-    ) -> Result<Vec<u8>> {
-        bail!("unsupported by Dapr output bindings: get_range")
+    ) -> impl Future<Output = Result<Vec<u8>>> + Send {
+        ready(Err(anyhow!("unsupported by Dapr output bindings: get_range")))
     }
 
-    async fn object_info(&self, _container: &str, _name: &str) -> Result<ObjectMetadata> {
-        bail!("unsupported by Dapr output bindings: object_info")
+    fn object_info(
+        &self, _container: &str, _name: &str,
+    ) -> impl Future<Output = Result<ObjectMetadata>> + Send {
+        ready(Err(anyhow!("unsupported by Dapr output bindings: object_info")))
     }
 
-    async fn create_container(&self, _name: &str) -> Result<()> {
-        bail!("unsupported by Dapr output bindings: create_container")
+    fn create_container(&self, _name: &str) -> impl Future<Output = Result<()>> + Send {
+        ready(Err(anyhow!("unsupported by Dapr output bindings: create_container")))
     }
 
-    async fn delete_container(&self, _name: &str) -> Result<()> {
-        bail!("unsupported by Dapr output bindings: delete_container")
+    fn delete_container(&self, _name: &str) -> impl Future<Output = Result<()>> + Send {
+        ready(Err(anyhow!("unsupported by Dapr output bindings: delete_container")))
     }
 
-    async fn container_exists(&self, _name: &str) -> Result<bool> {
-        bail!("unsupported by Dapr output bindings: container_exists")
+    fn container_exists(&self, _name: &str) -> impl Future<Output = Result<bool>> + Send {
+        ready(Err(anyhow!("unsupported by Dapr output bindings: container_exists")))
     }
 
-    async fn container_info(&self, _name: &str) -> Result<ContainerMetadata> {
-        bail!("unsupported by Dapr output bindings: container_info")
+    fn container_info(
+        &self, _name: &str,
+    ) -> impl Future<Output = Result<ContainerMetadata>> + Send {
+        ready(Err(anyhow!("unsupported by Dapr output bindings: container_info")))
     }
 }

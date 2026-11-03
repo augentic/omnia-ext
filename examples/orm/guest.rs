@@ -16,7 +16,7 @@ use chrono::Utc;
 use omnia_orm::{
     DeleteBuilder, Entity, Filter, InsertBuilder, Join, SelectBuilder, UpdateBuilder, entity,
 };
-use omnia_sdk::{HttpResult, TableStore, WasiWasiProvider};
+use omnia_sdk::{HttpResult, TableStore, WasiProvider};
 use omnia_wasi_sql::readwrite;
 use omnia_wasi_sql::types::{Connection, Statement};
 use serde::{Deserialize, Serialize};
@@ -67,7 +67,10 @@ async fn create_agency(Json(req): Json<CreateAgencyRequest>) -> HttpResult<Json<
 
     let query = InsertBuilder::<Agency>::from_entity(&agency).build().context("building insert")?;
 
-    WasiProvider.exec("db".to_string(), query.sql, query.params).await.context("inserting agency")?;
+    WasiProvider
+        .exec("db".to_string(), query.sql, query.params)
+        .await
+        .context("inserting agency")?;
 
     Ok(Json(json!({ "agency": agency })))
 }
@@ -169,8 +172,10 @@ async fn delete_feed(Path(id): Path<i64>) -> HttpResult<Json<Value>> {
         .build()
         .context("building delete")?;
 
-    let rows_affected =
-        WasiProvider.exec("db".to_string(), query.sql, query.params).await.context("deleting feed")?;
+    let rows_affected = WasiProvider
+        .exec("db".to_string(), query.sql, query.params)
+        .await
+        .context("deleting feed")?;
 
     if rows_affected == 0 {
         return Err(anyhow!("feed not found").into());

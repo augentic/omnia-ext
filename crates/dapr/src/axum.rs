@@ -30,14 +30,14 @@ struct BridgeState<P: Send + Sync + 'static> {
 }
 
 /// Builds an [`axum::Router`] that exposes Dapr programmatic subscriptions for
-/// `router` and dispatches inbound CloudEvents 1.0 deliveries into
+/// `router` and dispatches inbound `CloudEvents` 1.0 deliveries into
 /// [`MessagingRouter::handle`].
 ///
 /// Mounts two routes:
 ///
 /// - `GET /dapr/subscribe` returning the list of subscribed topics on
 ///   [`Dapr::pubsub`].
-/// - `POST /dapr/events/{*topic}` decoding structured or binary CloudEvents
+/// - `POST /dapr/events/{*topic}` decoding structured or binary `CloudEvents`
 ///   1.0 requests and returning `{"status": "SUCCESS" | "RETRY" | "DROP"}`.
 pub fn subscriptions<P, H>(router: MessagingRouter<P>, dapr: &Dapr<H>) -> Router
 where
