@@ -30,8 +30,6 @@ thiserror.workspace = true
 tracing.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-omnia-backend = { workspace = true, features = ["defaults", "http"] }
-omnia-native.workspace = true
 omnia-test = { workspace = true, features = ["guest"] }
-tokio = { workspace = true, features = ["macros", "net", "rt"] }
+tokio = { workspace = true, features = ["macros", "rt", "time"] }
 tower.workspace = true

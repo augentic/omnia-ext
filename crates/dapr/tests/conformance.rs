@@ -2,8 +2,12 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
+use std::any::Any;
 use std::collections::HashMap;
+use std::error::Error as StdError;
+use std::future::{Future, poll_fn};
 use std::sync::{Arc, Mutex};
+use std::task::{Poll, ready};
 use std::time::Duration;
 
 use axum::extract::{Path, RawQuery, State};
@@ -12,23 +16,65 @@ use axum::{Json, Router};
 use bytes::Bytes;
 use http::header::{CONTENT_TYPE, ETAG};
 use http::{HeaderMap, Request, Response, StatusCode};
+use http_body::{Body as HttpBody, Frame};
 use http_body_util::{BodyExt as _, Full};
-use omnia_backend::http::ConnectOptions as HttpOptions;
-use omnia_backend::{Connect as _, HttpDefault};
 use omnia_dapr::Dapr;
 use omnia_dapr::axum::subscriptions;
-use omnia_native::Direct;
 use omnia_sdk::api::messaging::{Router as MessagingRouter, consume};
 use omnia_sdk::api::{Client, Context};
-use omnia_sdk::{BlobStore, BlobStoreExt as _, Error, StateStore};
+use omnia_sdk::{BlobStore, Error, HttpRequest, StateStore};
 use omnia_test::conformance;
 use serde::Deserialize;
 use serde_json::{Value, json};
-use tokio::net::TcpListener;
 use tokio::time::Instant;
 use tower::ServiceExt as _;
 
 omnia_test::conformance!(state, publish, config);
+
+#[derive(Clone)]
+struct LoopbackHttp(Router);
+
+impl HttpRequest for LoopbackHttp {
+    async fn fetch<T>(&self, request: Request<T>) -> anyhow::Result<Response<Bytes>>
+    where
+        T: HttpBody + Any + Send,
+        T::Data: Into<Vec<u8>>,
+        T::Error: Into<Box<dyn StdError + Send + Sync + 'static>>,
+    {
+        let (parts, body) = request.into_parts();
+        let req_bytes = collect_body(body).await.map_err(anyhow::Error::from_boxed)?;
+        let outbound = Request::from_parts(parts, axum::body::Body::from(req_bytes));
+        let response = self.0.clone().oneshot(outbound).await?;
+        let (resp_parts, resp_body) = response.into_parts();
+        let resp_bytes = resp_body.collect().await?.to_bytes();
+        Ok(Response::from_parts(resp_parts, resp_bytes))
+    }
+}
+
+fn collect_body<T>(
+    body: T,
+) -> impl Future<Output = Result<Vec<u8>, Box<dyn StdError + Send + Sync>>> + Send
+where
+    T: HttpBody + Send,
+    T::Data: Into<Vec<u8>>,
+    T::Error: Into<Box<dyn StdError + Send + Sync + 'static>>,
+{
+    let mut body = Box::pin(body);
+    let mut bytes = Vec::new();
+    poll_fn(move |cx| {
+        loop {
+            match ready!(body.as_mut().poll_frame(cx)) {
+                Some(Ok(frame)) => {
+                    if let Ok(data) = Frame::into_data(frame) {
+                        bytes.extend(data.into());
+                    }
+                }
+                Some(Err(error)) => return Poll::Ready(Err(error.into())),
+                None => return Poll::Ready(Ok(std::mem::take(&mut bytes))),
+            }
+        }
+    })
+}
 
 #[derive(Clone, Default)]
 struct FakeSidecar {
@@ -81,7 +127,7 @@ struct BindingCall {
 }
 
 impl FakeSidecar {
-    async fn serve() -> (Self, Dapr<Direct<HttpDefault>>) {
+    fn new() -> (Self, Dapr<LoopbackHttp>) {
         let sidecar = Self::default();
         sidecar
             .inner
@@ -98,16 +144,7 @@ impl FakeSidecar {
             .route("/v1.0/bindings/{container}", post(binding_post))
             .with_state(sidecar.clone());
 
-        let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind fake sidecar");
-        let addr = listener.local_addr().expect("local addr");
-        tokio::spawn(async move {
-            let _ = axum::serve(listener, app).await;
-        });
-
-        let http = Direct::new(
-            HttpDefault::connect_with(HttpOptions { connect_timeout: 5 }).await.expect("http"),
-        );
-        let dapr = Dapr::new(http).endpoint(format!("http://{addr}"));
+        let dapr = Dapr::new(LoopbackHttp(app));
         (sidecar, dapr)
     }
 
@@ -275,31 +312,31 @@ async fn binding_post(
 
 #[tokio::test]
 async fn state_get_set_delete() {
-    let (_sidecar, dapr) = FakeSidecar::serve().await;
+    let (_sidecar, dapr) = FakeSidecar::new();
     conformance::state_get_set_delete(&dapr).await;
 }
 
 #[tokio::test]
 async fn state_ttl_expires() {
-    let (_sidecar, dapr) = FakeSidecar::serve().await;
+    let (_sidecar, dapr) = FakeSidecar::new();
     conformance::state_ttl_expires(&dapr).await;
 }
 
 #[tokio::test]
 async fn state_cas() {
-    let (_sidecar, dapr) = FakeSidecar::serve().await;
+    let (_sidecar, dapr) = FakeSidecar::new();
     conformance::state_cas(&dapr).await;
 }
 
 #[tokio::test]
 async fn state_increment() {
-    let (_sidecar, dapr) = FakeSidecar::serve().await;
+    let (_sidecar, dapr) = FakeSidecar::new();
     conformance::state_increment(&dapr).await;
 }
 
 #[tokio::test]
 async fn publish_send() {
-    let (sidecar, dapr) = FakeSidecar::serve().await;
+    let (sidecar, dapr) = FakeSidecar::new();
     conformance::publish_send(&dapr).await;
 
     let published = sidecar.published();
@@ -312,13 +349,13 @@ async fn publish_send() {
 
 #[tokio::test]
 async fn config_get() {
-    let (_sidecar, dapr) = FakeSidecar::serve().await;
+    let (_sidecar, dapr) = FakeSidecar::new();
     conformance::config_get(&dapr).await;
 }
 
 #[tokio::test]
 async fn blobstore_partial_bindings() {
-    let (_sidecar, dapr) = FakeSidecar::serve().await;
+    let (_sidecar, dapr) = FakeSidecar::new();
     let container = "dapr-blobs";
 
     assert_eq!(BlobStore::get(&dapr, container, "missing").await.expect("missing is None"), None);
@@ -387,7 +424,7 @@ async fn blobstore_partial_bindings() {
 #[derive(Clone, omnia_sdk::Provider)]
 struct AppProvider {
     #[provider(StateStore)]
-    dapr: Dapr<Direct<HttpDefault>>,
+    dapr: Dapr<LoopbackHttp>,
 }
 
 fn dapr_messaging_router(provider: AppProvider) -> MessagingRouter<AppProvider> {
@@ -424,7 +461,7 @@ async fn send_json(app: &Router, req: Request<axum::body::Body>) -> Value {
 
 #[tokio::test]
 async fn subscriptions_cloudevents_bridge() {
-    let (_sidecar, dapr) = FakeSidecar::serve().await;
+    let (_sidecar, dapr) = FakeSidecar::new();
     let messaging = dapr_messaging_router(AppProvider { dapr: dapr.clone() });
     let app = subscriptions(messaging, &dapr);
 

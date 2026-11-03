@@ -1,13 +1,14 @@
 # omnia-dapr
 
 Dapr HTTP v1.0 sidecar provider and `CloudEvents` 1.0 subscription bridge for
-[Omnia](https://github.com/augentic/omnia) handlers.
+[Omnia](https://github.com/augentic/omnia) guest handlers.
 
 `Dapr<H>` implements the `omnia_sdk` capability traits that Dapr's HTTP v1.0
 building blocks support (`StateStore`, `Publish`, `Config`, and basic
-`BlobStore` object operations) over any `H: HttpRequest`. Because it is
-generic over `HttpRequest`, the same provider runs in a native binary over
-`Direct<HttpDefault>` and inside a `wasm32-wasip2` guest over `WasiProvider`.
+`BlobStore` object operations) over any `H: HttpRequest`. Inside a
+`wasm32-wasip2` guest, `Dapr<WasiProvider>` routes Dapr building blocks over
+`wasi:http` while `#[derive(omnia_sdk::Provider)]` delegates any remaining
+capabilities to `WasiProvider`.
 
 ## Capabilities and contract deviations
 
@@ -19,8 +20,8 @@ generic over `HttpRequest`, the same provider runs in a native binary over
 | `BlobStore` (partial) | Output bindings (`/v1.0/bindings/{container}`) | Serves `get`, `put`, `delete`, and `list`; `get_range`, `object_info`, and container operations return `Unsupported`. |
 
 Capabilities outside Dapr's building blocks (`TableStore`, `DocumentStore`,
-`Identity`, `Vault`, `Broadcast`, `Model`, `Vcs`) are served alongside
-`Dapr<H>` by `omnia_native::Direct<T>` fields on a `#[derive(omnia_sdk::Provider)]`
+`Identity`, `Vault`, `Broadcast`, `Model`, `Vcs`, `Plugins`) are served
+alongside `Dapr<H>` by `WasiProvider` on a `#[derive(omnia_sdk::Provider)]`
 struct.
 
 ## Inbound subscriptions
