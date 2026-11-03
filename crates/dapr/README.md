@@ -14,7 +14,7 @@ capabilities to `WasiProvider`.
 
 | Trait | Dapr building block | Notes |
 | --- | --- | --- |
-| `StateStore` | State API (`/v1.0/state/{store}`) | Raw bytes are base64-encoded in the JSON state item so binary payloads and 8-byte big-endian counters round-trip intact. `set` sends `metadata.ttlInSeconds` in one round trip. `cas` reads the current value and `ETag`, then issues a `first-write` conditional `POST` re-supplying any remaining TTL. **Deviation:** `increment` uses a bounded CAS retry loop over an 8-byte big-endian `i64` because Dapr has no atomic counter API. |
+| `StateStore` | State API (`/v1.0/state/{store}`) | Raw bytes are base64-encoded in the JSON state item so binary payloads and 8-byte big-endian counters round-trip intact. `set` sends `metadata.ttlInSeconds` in one round trip. `cas` reads the current value and `ETag`, then issues a `first-write` conditional `POST` re-supplying any remaining TTL tracked in-memory on this `Dapr` instance (Dapr's state `GET` does not return a key's remaining TTL). **Deviation:** `increment` uses a bounded CAS retry loop over an 8-byte big-endian `i64` because Dapr has no atomic counter API. |
 | `Publish` | Pub/Sub API (`/v1.0/publish/{pubsub}/{topic}`) | Payload is sent as the request body; `Message::headers` map to `metadata.*` query parameters. |
 | `Config` | Configuration API (`/v1.0/configuration/{store}`) | Optional process-environment fallback for local runs. |
 | `BlobStore` (partial) | Output bindings (`/v1.0/bindings/{container}`) | Serves `get`, `put`, `delete`, and `list`; `get_range`, `object_info`, and container operations return `Unsupported`. |

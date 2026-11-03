@@ -7,6 +7,7 @@ mod protocol;
 use std::collections::HashMap;
 use std::future::{Future, ready};
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, SystemTime};
 
 use anyhow::{Context as _, Result, anyhow, bail};
 use omnia_sdk::blobstore::{ContainerMetadata, ObjectMetadata};
@@ -30,7 +31,7 @@ pub struct Dapr<H> {
     pubsub: String,
     config_store: String,
     env_fallback: bool,
-    ttls: Arc<Mutex<HashMap<String, u64>>>,
+    ttls: Arc<Mutex<HashMap<String, SystemTime>>>,
 }
 
 impl<H> Dapr<H> {
@@ -127,7 +128,8 @@ impl<H> Dapr<H> {
         let mut ttls = self.ttls.lock().expect("ttl map lock");
         match ttl_secs {
             Some(secs) => {
-                ttls.insert(key.to_owned(), secs);
+                let deadline = SystemTime::now() + Duration::from_secs(secs);
+                ttls.insert(key.to_owned(), deadline);
             }
             None => {
                 ttls.remove(key);
@@ -136,7 +138,17 @@ impl<H> Dapr<H> {
     }
 
     fn tracked_ttl_secs(&self, key: &str) -> Option<u64> {
-        self.ttls.lock().expect("ttl map lock").get(key).copied()
+        let mut ttls = self.ttls.lock().expect("ttl map lock");
+        let deadline = *ttls.get(key)?;
+        match deadline.duration_since(SystemTime::now()) {
+            Ok(remaining) if !remaining.is_zero() => {
+                Some(remaining.as_secs().saturating_add(u64::from(remaining.subsec_nanos() > 0)))
+            }
+            _ => {
+                ttls.remove(key);
+                None
+            }
+        }
     }
 }
 
@@ -144,7 +156,11 @@ impl<H: HttpRequest> StateStore for Dapr<H> {
     async fn get(&self, key: &str) -> Result<Option<Vec<u8>>> {
         let req = protocol::state_get_request(&self.endpoint, &self.state_store, key)?;
         let resp = self.http.fetch(req).await?;
-        Ok(protocol::parse_state_get(&resp)?.map(|entry| entry.value))
+        let value = protocol::parse_state_get(&resp)?.map(|entry| entry.value);
+        if value.is_none() {
+            self.record_ttl(key, None);
+        }
+        Ok(value)
     }
 
     async fn set(&self, key: &str, value: &[u8], ttl_secs: Option<u64>) -> Result<()> {
@@ -172,6 +188,9 @@ impl<H: HttpRequest> StateStore for Dapr<H> {
             self.http.fetch(get_req).await.map_err(|e| CasError::Store(e.to_string()))?;
         let current =
             protocol::parse_state_get(&get_resp).map_err(|e| CasError::Store(e.to_string()))?;
+        if current.is_none() {
+            self.record_ttl(key, None);
+        }
 
         let observed_bytes = current.as_ref().map(|e| e.value.as_slice());
         if observed_bytes != expected {

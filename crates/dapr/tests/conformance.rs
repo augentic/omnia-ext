@@ -320,6 +320,19 @@ async fn state_get_set_delete() {
 async fn state_ttl_expires() {
     let (_sidecar, dapr) = FakeSidecar::new();
     conformance::state_ttl_expires(&dapr).await;
+
+    // Re-creating an expired TTL key via absent-expected CAS must not inherit
+    // the expired key's stale TTL.
+    let key = "conformance/ttl-recreated-via-cas";
+    dapr.set(key, b"short", Some(1)).await.expect("set short ttl");
+    tokio::time::sleep(Duration::from_millis(1100)).await;
+    dapr.cas(key, None, b"permanent").await.expect("cas from expired absent");
+    tokio::time::sleep(Duration::from_millis(1100)).await;
+    assert_eq!(
+        StateStore::get(&dapr, key).await.expect("get permanent after cas"),
+        Some(b"permanent".to_vec())
+    );
+    StateStore::delete(&dapr, key).await.expect("cleanup permanent");
 }
 
 #[tokio::test]
