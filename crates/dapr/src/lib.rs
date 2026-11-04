@@ -7,7 +7,7 @@ mod protocol;
 use std::collections::HashMap;
 use std::future::{Future, ready};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant};
 
 use anyhow::{Context as _, Result, anyhow, bail};
 use omnia_sdk::blobstore::{ContainerMetadata, ObjectMetadata};
@@ -31,7 +31,7 @@ pub struct Dapr<H> {
     pubsub: String,
     config_store: String,
     env_fallback: bool,
-    ttls: Arc<Mutex<HashMap<String, SystemTime>>>,
+    ttls: Arc<Mutex<HashMap<String, Instant>>>,
 }
 
 impl<H> Dapr<H> {
@@ -124,11 +124,12 @@ impl<H> Dapr<H> {
         &self.pubsub
     }
 
+    #[expect(clippy::disallowed_methods, reason = "tracks remaining TTL across Dapr CAS calls")]
     fn record_ttl(&self, key: &str, ttl_secs: Option<u64>) {
         let mut ttls = self.ttls.lock().expect("ttl map lock");
         match ttl_secs {
             Some(secs) => {
-                let deadline = SystemTime::now() + Duration::from_secs(secs);
+                let deadline = Instant::now() + Duration::from_secs(secs);
                 ttls.insert(key.to_owned(), deadline);
             }
             None => {
@@ -137,18 +138,17 @@ impl<H> Dapr<H> {
         }
     }
 
+    #[expect(clippy::disallowed_methods, reason = "tracks remaining TTL across Dapr CAS calls")]
     fn tracked_ttl_secs(&self, key: &str) -> Option<u64> {
         let mut ttls = self.ttls.lock().expect("ttl map lock");
         let deadline = *ttls.get(key)?;
-        match deadline.duration_since(SystemTime::now()) {
-            Ok(remaining) if !remaining.is_zero() => {
-                Some(remaining.as_secs().saturating_add(u64::from(remaining.subsec_nanos() > 0)))
-            }
-            _ => {
-                ttls.remove(key);
-                None
-            }
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            ttls.remove(key);
         }
+        drop(ttls);
+        (!remaining.is_zero())
+            .then(|| remaining.as_secs().saturating_add(u64::from(remaining.subsec_nanos() > 0)))
     }
 }
 
