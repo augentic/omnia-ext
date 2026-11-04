@@ -58,7 +58,7 @@ impl StateStore for BrokenStore {
 
     fn set(
         &self, _key: &str, _value: &[u8], _ttl_secs: Option<u64>,
-    ) -> impl Future<Output = Result<Option<Vec<u8>>>> + Send {
+    ) -> impl Future<Output = Result<()>> + Send {
         ready(Err(anyhow!("store unavailable")))
     }
 

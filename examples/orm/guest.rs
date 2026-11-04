@@ -16,30 +16,20 @@ use chrono::Utc;
 use omnia_orm::{
     DeleteBuilder, Entity, Filter, InsertBuilder, Join, SelectBuilder, UpdateBuilder, entity,
 };
-use omnia_sdk::{HttpResult, TableStore};
+use omnia_sdk::{HttpResult, TableStore, WasiProvider};
 use omnia_wasi_sql::readwrite;
 use omnia_wasi_sql::types::{Connection, Statement};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use tracing::Level;
-use wasip3::exports::http::handler::Guest;
-use wasip3::http::types::{ErrorCode, Request, Response};
 
-struct Http;
-wasip3::http::service::export!(Http);
-
-impl Guest for Http {
-    #[omnia_wasi_otel::instrument(name = "http_guest_handle", level = Level::DEBUG)]
-    async fn handle(request: Request) -> Result<Response, ErrorCode> {
-        let router = Router::new()
-            .route("/agencies", get(list_agencies).post(create_agency))
-            .route("/agencies/{id}", patch(update_agency))
-            .route("/agencies/{id}/feeds", post(create_feed))
-            .route("/feeds", get(list_all_feeds))
-            .route("/feeds/{id}", delete(delete_feed));
-        omnia_wasi_http::serve(router, request).await
-    }
-}
+omnia_sdk::http!(
+    Router::new()
+        .route("/agencies", get(list_agencies).post(create_agency))
+        .route("/agencies/{id}", patch(update_agency))
+        .route("/agencies/{id}/feeds", post(create_feed))
+        .route("/feeds", get(list_all_feeds))
+        .route("/feeds/{id}", delete(delete_feed))
+);
 
 /// List all agencies (`SelectBuilder`).
 #[omnia_wasi_otel::instrument]
@@ -51,7 +41,7 @@ async fn list_agencies() -> HttpResult<Json<Value>> {
         .build()
         .context("building query")?;
 
-    let rows = Provider
+    let rows = WasiProvider
         .query("db".to_string(), select.sql, select.params)
         .await
         .context("executing query")?;
@@ -77,7 +67,10 @@ async fn create_agency(Json(req): Json<CreateAgencyRequest>) -> HttpResult<Json<
 
     let query = InsertBuilder::<Agency>::from_entity(&agency).build().context("building insert")?;
 
-    Provider.exec("db".to_string(), query.sql, query.params).await.context("inserting agency")?;
+    WasiProvider
+        .exec("db".to_string(), query.sql, query.params)
+        .await
+        .context("inserting agency")?;
 
     Ok(Json(json!({ "agency": agency })))
 }
@@ -96,7 +89,7 @@ async fn update_agency(
         .build()
         .context("building update")?;
 
-    let rows_affected = Provider
+    let rows_affected = WasiProvider
         .exec("db".to_string(), query.sql, query.params)
         .await
         .context("updating agency")?;
@@ -121,7 +114,7 @@ async fn create_feed(
         .build()
         .context("building agency lookup")?;
 
-    let rows = Provider
+    let rows = WasiProvider
         .query("db".to_string(), select.sql, select.params)
         .await
         .context("executing agency lookup")?;
@@ -139,7 +132,7 @@ async fn create_feed(
 
     let query = InsertBuilder::<Feed>::from_entity(&feed).build().context("building insert")?;
 
-    Provider.exec("db".to_string(), query.sql, query.params).await.context("inserting feed")?;
+    WasiProvider.exec("db".to_string(), query.sql, query.params).await.context("inserting feed")?;
 
     Ok(Json(json!({ "feed": feed })))
 }
@@ -155,7 +148,7 @@ async fn list_all_feeds() -> HttpResult<Json<Value>> {
         .build()
         .context("building join query")?;
 
-    let rows = Provider
+    let rows = WasiProvider
         .query("db".to_string(), select.sql, select.params)
         .await
         .context("executing join query")?;
@@ -179,8 +172,10 @@ async fn delete_feed(Path(id): Path<i64>) -> HttpResult<Json<Value>> {
         .build()
         .context("building delete")?;
 
-    let rows_affected =
-        Provider.exec("db".to_string(), query.sql, query.params).await.context("deleting feed")?;
+    let rows_affected = WasiProvider
+        .exec("db".to_string(), query.sql, query.params)
+        .await
+        .context("deleting feed")?;
 
     if rows_affected == 0 {
         return Err(anyhow!("feed not found").into());
@@ -292,9 +287,3 @@ struct CreateFeedRequest {
     feed_id: i64,
     description: String,
 }
-
-/// On wasm32 `TableStore` carries a WASI-backed default, so the empty impl is
-/// the whole `wasi:sql` wiring.
-struct Provider;
-
-impl TableStore for Provider {}

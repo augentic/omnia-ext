@@ -9,7 +9,7 @@ component and against `omnia_test` doubles natively.
 ## Relation to omnia
 
 Dependency is strictly one-way. The omnia crates are published crates.io
-dependencies (currently 0.37.0) declared once under
+dependencies (currently 0.38.0) declared once under
 `[workspace.dependencies]` in `Cargo.toml`; every `omnia-*` crate moves
 together, and there are no `[patch.crates-io]` overrides. Production
 backends live in [omnia-backends](https://github.com/augentic/omnia-backends)
@@ -19,6 +19,7 @@ and are a host-side concern; nothing here talks to them.
 
 | Crate | Description |
 | --- | --- |
+| [`omnia-dapr`](crates/dapr) | `Dapr<H>` sidecar provider implementing `StateStore`, `Publish`, `Config`, and basic `BlobStore` operations over Dapr HTTP v1.0, plus `axum::subscriptions` for inbound CloudEvents 1.0 deliveries. |
 | [`omnia-http-cache`](crates/http-cache) | `HttpCache<H, S>` decorator over `HttpRequest` + `StateStore`. Requests carrying `Cache-Control` and `If-None-Match` are answered from, and written back through, the injected store. |
 | [`omnia-orm`](crates/orm) | `entity!` mapping and typed `SELECT` / `INSERT` / `UPDATE` / `DELETE` builders that render parameterized SQL for `TableStore` to execute over `wasi:sql`. |
 

@@ -6,7 +6,7 @@ builders produce parameterized `SELECT` / `INSERT` / `UPDATE` / `DELETE`
 statements as `{ sql, params }` pairs; executing them is left to whatever
 implements `omnia_sdk::TableStore`. SQL generation is delegated to
 [`sea-query`](https://crates.io/crates/sea-query) and the crate re-exports
-`Row`, `Field` and `DataType` from `omnia-wasi-sql` so row mapping needs no
+`Row`, `Field` and `DataType` from `omnia_sdk::sql` so row mapping needs no
 extra dependency.
 
 ## Defining entities
@@ -162,24 +162,20 @@ entity's defaults.
 ## Usage
 
 Builders know nothing about connections. Hand `query.sql` and
-`query.params` to an `omnia_sdk::TableStore` (feature `sql`); on `wasm32`
-the trait carries WASI-backed default method bodies, so a unit provider is
-one empty impl. `query` returns rows to map with `Entity::from_row`, `exec`
-returns the affected-row count:
+`query.params` to an `omnia_sdk::TableStore` (feature `sql`); on `wasm32`,
+`omnia_sdk::WasiProvider` implements `TableStore` over WASI imports. `query`
+returns rows to map with `Entity::from_row`, `exec` returns the affected-row
+count:
 
 ```rust,ignore
 use anyhow::Result;
 use omnia_orm::{Entity, Filter, SelectBuilder};
-use omnia_sdk::TableStore;
-
-struct Provider;
-
-impl TableStore for Provider {}
+use omnia_sdk::{TableStore, WasiProvider};
 
 let query = SelectBuilder::<Agency>::new()
     .r#where(Filter::eq("agency_id", id))
     .build()?;
-let rows = Provider.query("db".to_string(), query.sql, query.params).await?;
+let rows = WasiProvider.query("db".to_string(), query.sql, query.params).await?;
 let agencies = rows.iter().map(Agency::from_row).collect::<Result<Vec<_>>>()?;
 ```
 

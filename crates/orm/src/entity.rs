@@ -241,7 +241,7 @@ mod tests {
 
     #[test]
     fn fetch_wrong_types() {
-        use omnia_wasi_sql::Field;
+        use omnia_sdk::sql::Field;
 
         fn one_field_row(value: DataType) -> Row {
             Row {

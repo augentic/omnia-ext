@@ -53,20 +53,14 @@ where cached fetches are wanted and use the bare provider everywhere else.
 
 ## Usage
 
-On `wasm32` the SDK's capability traits carry default WASI-backed method
-bodies, so a unit provider needs one empty impl per capability. The same
-provider can serve as both transport and store:
+On `wasm32`, `omnia_sdk::WasiProvider` implements all capability traits over
+WASI imports, so it can serve as both transport and store:
 
 ```rust,ignore
 use omnia_http_cache::HttpCache;
-use omnia_sdk::{HttpRequest, StateStore};
+use omnia_sdk::{HttpRequest, WasiProvider};
 
-struct Provider;
-
-impl HttpRequest for Provider {}
-impl StateStore for Provider {}
-
-let cache = HttpCache::new(Provider, Provider);
+let cache = HttpCache::new(WasiProvider, WasiProvider);
 let request = http::Request::get("https://origin.example/resource")
     .header(http::header::CACHE_CONTROL, "max-age=300")
     .header(http::header::IF_NONE_MATCH, "\"v1\"")

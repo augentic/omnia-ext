@@ -16,36 +16,15 @@ use http::Method;
 use http::header::{CACHE_CONTROL, IF_NONE_MATCH};
 use http_body_util::Empty;
 use omnia_http_cache::HttpCache;
-use omnia_sdk::{Config, HttpRequest, HttpResult, StateStore};
-use tracing::Level;
-use wasip3::exports::http::handler::Guest;
-use wasip3::http::types::{ErrorCode, Request, Response};
+use omnia_sdk::{Config, HttpRequest, HttpResult, WasiProvider};
 
-/// On wasm32 every capability trait carries a WASI-backed default, so the
-/// empty impls are the whole wiring: `wasi:config`, `wasi:http` and
-/// `wasi:keyvalue` respectively.
-struct Provider;
-
-impl Config for Provider {}
-impl HttpRequest for Provider {}
-impl StateStore for Provider {}
-
-struct HttpGuest;
-wasip3::http::service::export!(HttpGuest);
-
-impl Guest for HttpGuest {
-    #[omnia_wasi_otel::instrument(name = "http_guest_handle", level = Level::DEBUG)]
-    async fn handle(request: Request) -> Result<Response, ErrorCode> {
-        let router = Router::new().route("/cached", get(cached));
-        omnia_wasi_http::serve(router, request).await
-    }
-}
+omnia_sdk::http!(Router::new().route("/cached", get(cached)));
 
 /// The first call reaches the origin; later calls within `max-age` are served
 /// from the store. Either way the response carries `ETag: "v1"`.
 #[omnia_wasi_otel::instrument]
 async fn cached() -> HttpResult<impl IntoResponse> {
-    let upstream = Config::get(&Provider, "UPSTREAM_URL").await?;
+    let upstream = Config::get(&WasiProvider, "UPSTREAM_URL").await?;
     tracing::info!("fetching {upstream}/resource through the cache");
 
     let request = http::Request::builder()
@@ -56,7 +35,7 @@ async fn cached() -> HttpResult<impl IntoResponse> {
         .body(Empty::<Bytes>::new())
         .context("building request")?;
 
-    let response = HttpCache::new(Provider, Provider).fetch(request).await?;
+    let response = HttpCache::new(WasiProvider, WasiProvider).fetch(request).await?;
     let (parts, body) = response.into_parts();
 
     Ok(http::Response::from_parts(parts, Body::from(body)))
