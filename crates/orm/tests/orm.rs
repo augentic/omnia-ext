@@ -312,7 +312,9 @@ async fn missing_column_fails_row_mapping() {
     let err = Agency::from_row(&rows[0]).expect_err("missing column");
     assert!(err.to_string().contains("missing column 'url'"), "{err}");
 
-    assert!(UpdateBuilder::<Agency>::new().r#where(Filter::eq("agency_id", 7_i64)).build().is_err());
+    assert!(
+        UpdateBuilder::<Agency>::new().r#where(Filter::eq("agency_id", 7_i64)).build().is_err()
+    );
     assert!(UpdateBuilder::<Agency>::new().set("name", "x").build().is_err());
     assert!(DeleteBuilder::<Feed>::new().build().is_err());
 }
