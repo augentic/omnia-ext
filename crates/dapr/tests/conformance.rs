@@ -367,7 +367,7 @@ async fn config_get() {
 }
 
 #[tokio::test]
-async fn blobstore_partial_bindings() {
+async fn blobstore_partial() {
     let (_sidecar, dapr) = FakeSidecar::new();
     let container = "dapr-blobs";
 
@@ -473,7 +473,7 @@ async fn send_json(app: &Router, req: Request<axum::body::Body>) -> Value {
 }
 
 #[tokio::test]
-async fn subscriptions_cloudevents_bridge() {
+async fn subs_cloudevents() {
     let (_sidecar, dapr) = FakeSidecar::new();
     let messaging = dapr_messaging_router(AppProvider { dapr: dapr.clone() });
     let app = subscriptions(messaging, &dapr);

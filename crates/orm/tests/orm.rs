@@ -250,7 +250,7 @@ async fn delete_with_filter() {
 }
 
 #[tokio::test]
-async fn select_join_with_aliased_columns() {
+async fn join_alias_cols() {
     let scripted = ScriptedTables::default().on_query(
         |sql, _| sql.contains("LEFT JOIN"),
         vec![row(vec![
@@ -290,7 +290,7 @@ async fn select_join_with_aliased_columns() {
 }
 
 #[tokio::test]
-async fn missing_column_fails_row_mapping() {
+async fn map_missing_col() {
     // A projection bug, not a NULL: the row lacks `url` entirely, so even
     // the `Option<String>` field refuses to map.
     let scripted = ScriptedTables::default().on_query(

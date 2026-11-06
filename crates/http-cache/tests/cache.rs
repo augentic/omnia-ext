@@ -145,7 +145,7 @@ async fn no_cache_refreshes() {
 }
 
 #[tokio::test]
-async fn cache_control_split_across_lines() {
+async fn cache_ctrl_multiline() {
     let provider = provider(StatusCode::OK);
     let cache = HttpCache::new(&provider, &provider);
 
@@ -171,7 +171,7 @@ async fn cache_control_split_across_lines() {
 }
 
 #[tokio::test]
-async fn no_cache_alone_bypasses_without_writing() {
+async fn no_cache_bypass() {
     let provider = provider(StatusCode::OK);
     let cache = HttpCache::new(&provider, &provider);
     let headers = [(CACHE_CONTROL, "no-cache"), (IF_NONE_MATCH, ETAG_V1)];
@@ -239,7 +239,7 @@ async fn non_success_not_stored() {
 }
 
 #[tokio::test]
-async fn partial_content_not_stored() {
+async fn partial_not_stored() {
     let provider = provider(StatusCode::PARTIAL_CONTENT);
     let cache = HttpCache::new(&provider, &provider);
     let headers = [(CACHE_CONTROL, "max-age=60"), (IF_NONE_MATCH, ETAG_V1)];
@@ -256,7 +256,7 @@ async fn partial_content_not_stored() {
 }
 
 #[tokio::test]
-async fn corrupt_entry_is_a_miss_and_replaced() {
+async fn corrupt_replaced() {
     let provider = provider(StatusCode::OK);
     let cache = HttpCache::new(&provider, &provider);
     let headers = [(CACHE_CONTROL, "max-age=60"), (IF_NONE_MATCH, ETAG_V1)];
@@ -278,7 +278,7 @@ async fn corrupt_entry_is_a_miss_and_replaced() {
 }
 
 #[tokio::test]
-async fn store_outage_degrades_to_origin() {
+async fn store_out_origin() {
     let provider = provider(StatusCode::OK);
     let cache = HttpCache::new(&provider, BrokenStore);
     let headers = [(CACHE_CONTROL, "max-age=60"), (IF_NONE_MATCH, ETAG_V1)];
@@ -295,7 +295,7 @@ async fn store_outage_degrades_to_origin() {
 }
 
 #[tokio::test]
-async fn without_cache_control_passes_through() {
+async fn no_cache_control() {
     let provider = provider(StatusCode::OK);
     let cache = HttpCache::new(&provider, &provider);
 
@@ -312,7 +312,7 @@ async fn without_cache_control_passes_through() {
 }
 
 #[tokio::test]
-async fn unrecognised_directives_pass_through() {
+async fn unknown_directives() {
     let provider = provider(StatusCode::OK);
     let cache = HttpCache::new(&provider, &provider);
 
@@ -337,7 +337,7 @@ async fn unrecognised_directives_pass_through() {
 }
 
 #[tokio::test]
-async fn malformed_directives_refused() {
+async fn bad_directives() {
     let provider = provider(StatusCode::OK);
     let cache = HttpCache::new(&provider, &provider);
 
