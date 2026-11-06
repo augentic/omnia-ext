@@ -81,6 +81,33 @@ struct FakeSidecar {
     inner: Arc<Mutex<SidecarState>>,
 }
 
+impl FakeSidecar {
+    fn new() -> (Self, Dapr<LoopbackHttp>) {
+        let sidecar = Self::default();
+        sidecar
+            .inner
+            .lock()
+            .expect("sidecar lock")
+            .config
+            .insert("CONFORMANCE_KEY".to_owned(), "conformance-val".to_owned());
+
+        let app = Router::new()
+            .route("/v1.0/state/{store}", post(state_post))
+            .route("/v1.0/state/{store}/{*key}", get(state_get).delete(state_delete))
+            .route("/v1.0/publish/{pubsub}/{*topic}", post(publish_post))
+            .route("/v1.0/configuration/{store}", get(config_get_route))
+            .route("/v1.0/bindings/{container}", post(binding_post))
+            .with_state(sidecar.clone());
+
+        let dapr = Dapr::new(LoopbackHttp(app));
+        (sidecar, dapr)
+    }
+
+    fn published(&self) -> Vec<PublishedEvent> {
+        self.inner.lock().expect("sidecar lock").published.clone()
+    }
+}
+
 #[derive(Default)]
 struct SidecarState {
     next_etag: u64,
@@ -124,33 +151,6 @@ struct BindingCall {
     operation: String,
     data: Option<String>,
     metadata: Option<HashMap<String, String>>,
-}
-
-impl FakeSidecar {
-    fn new() -> (Self, Dapr<LoopbackHttp>) {
-        let sidecar = Self::default();
-        sidecar
-            .inner
-            .lock()
-            .expect("sidecar lock")
-            .config
-            .insert("CONFORMANCE_KEY".to_owned(), "conformance-val".to_owned());
-
-        let app = Router::new()
-            .route("/v1.0/state/{store}", post(state_post))
-            .route("/v1.0/state/{store}/{*key}", get(state_get).delete(state_delete))
-            .route("/v1.0/publish/{pubsub}/{*topic}", post(publish_post))
-            .route("/v1.0/configuration/{store}", get(config_get_route))
-            .route("/v1.0/bindings/{container}", post(binding_post))
-            .with_state(sidecar.clone());
-
-        let dapr = Dapr::new(LoopbackHttp(app));
-        (sidecar, dapr)
-    }
-
-    fn published(&self) -> Vec<PublishedEvent> {
-        self.inner.lock().expect("sidecar lock").published.clone()
-    }
 }
 
 fn live_entry<'a>(

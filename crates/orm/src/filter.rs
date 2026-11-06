@@ -65,39 +65,6 @@ pub enum CmpOp {
 #[derive(Debug, Clone)]
 pub struct Filter(FilterKind);
 
-#[derive(Debug, Clone)]
-enum FilterKind {
-    /// `col <op> value`
-    Compare(ColRef, CmpOp, Value),
-    /// `col IN (values)` or `col NOT IN (values)` when negated.
-    In(ColRef, Vec<Value>, bool),
-    /// `col IS NULL` or `col IS NOT NULL` when negated.
-    Null(ColRef, bool),
-    /// `col LIKE pattern` or `col NOT LIKE pattern` when negated.
-    Like(ColRef, String, bool),
-    /// `col BETWEEN low AND high` or `col NOT BETWEEN low AND high` when negated.
-    Between(ColRef, Value, Value, bool),
-    /// Column-to-column comparison, e.g. `table1.col1 <op> table2.col2`.
-    ColCompare(ColRef, CmpOp, ColRef),
-    /// Logical AND of multiple filters.
-    And(Vec<Filter>),
-    /// Logical OR of multiple filters.
-    Or(Vec<Filter>),
-    /// Logical NOT of a filter.
-    Not(Box<Filter>),
-}
-
-fn apply_cmp(left: SimpleExpr, op: CmpOp, right: SimpleExpr) -> SimpleExpr {
-    match op {
-        CmpOp::Eq => left.eq(right),
-        CmpOp::Ne => left.ne(right),
-        CmpOp::Gt => left.gt(right),
-        CmpOp::Gte => left.gte(right),
-        CmpOp::Lt => left.lt(right),
-        CmpOp::Lte => left.lte(right),
-    }
-}
-
 impl Filter {
     /// Convert Filter to ``SeaQuery`` ``SimpleExpr`` using the specified default table.
     #[must_use]
@@ -293,5 +260,38 @@ impl Filter {
             CmpOp::Eq,
             ColRef::qualified(table2, col2),
         ))
+    }
+}
+
+#[derive(Debug, Clone)]
+enum FilterKind {
+    /// `col <op> value`
+    Compare(ColRef, CmpOp, Value),
+    /// `col IN (values)` or `col NOT IN (values)` when negated.
+    In(ColRef, Vec<Value>, bool),
+    /// `col IS NULL` or `col IS NOT NULL` when negated.
+    Null(ColRef, bool),
+    /// `col LIKE pattern` or `col NOT LIKE pattern` when negated.
+    Like(ColRef, String, bool),
+    /// `col BETWEEN low AND high` or `col NOT BETWEEN low AND high` when negated.
+    Between(ColRef, Value, Value, bool),
+    /// Column-to-column comparison, e.g. `table1.col1 <op> table2.col2`.
+    ColCompare(ColRef, CmpOp, ColRef),
+    /// Logical AND of multiple filters.
+    And(Vec<Filter>),
+    /// Logical OR of multiple filters.
+    Or(Vec<Filter>),
+    /// Logical NOT of a filter.
+    Not(Box<Filter>),
+}
+
+fn apply_cmp(left: SimpleExpr, op: CmpOp, right: SimpleExpr) -> SimpleExpr {
+    match op {
+        CmpOp::Eq => left.eq(right),
+        CmpOp::Ne => left.ne(right),
+        CmpOp::Gt => left.gt(right),
+        CmpOp::Gte => left.gte(right),
+        CmpOp::Lt => left.lt(right),
+        CmpOp::Lte => left.lte(right),
     }
 }

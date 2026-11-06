@@ -18,6 +18,33 @@ pub trait FetchValue: Sized {
     fn fetch(row: &Row, col: &str) -> anyhow::Result<Self>;
 }
 
+impl FetchValue for DateTime<Utc> {
+    fn fetch(row: &Row, col: &str) -> anyhow::Result<Self> {
+        parse_timestamp(row_field(row, col)?)
+    }
+}
+
+impl FetchValue for NaiveDate {
+    fn fetch(row: &Row, col: &str) -> anyhow::Result<Self> {
+        parse_date(row_field(row, col)?)
+    }
+}
+
+impl FetchValue for serde_json::Value {
+    fn fetch(row: &Row, col: &str) -> anyhow::Result<Self> {
+        parse_json(row_field(row, col)?)
+    }
+}
+
+impl<T: FetchValue> FetchValue for Option<T> {
+    fn fetch(row: &Row, col: &str) -> anyhow::Result<Self> {
+        // Only SQL NULL maps to `None`; a missing column is a projection bug
+        // and propagates as an error rather than masquerading as NULL.
+        let field = row_field(row, col)?;
+        if is_null(field) { Ok(None) } else { T::fetch(row, col).map(Some) }
+    }
+}
+
 /// Trait for database entities with metadata for query building.
 ///
 /// Typically implemented via the `entity!` macro rather than manually.
@@ -110,33 +137,6 @@ fetch! {
     f64     => Double,
     String  => Str,
     Vec<u8> => Binary,
-}
-
-impl FetchValue for DateTime<Utc> {
-    fn fetch(row: &Row, col: &str) -> anyhow::Result<Self> {
-        parse_timestamp(row_field(row, col)?)
-    }
-}
-
-impl FetchValue for NaiveDate {
-    fn fetch(row: &Row, col: &str) -> anyhow::Result<Self> {
-        parse_date(row_field(row, col)?)
-    }
-}
-
-impl FetchValue for serde_json::Value {
-    fn fetch(row: &Row, col: &str) -> anyhow::Result<Self> {
-        parse_json(row_field(row, col)?)
-    }
-}
-
-impl<T: FetchValue> FetchValue for Option<T> {
-    fn fetch(row: &Row, col: &str) -> anyhow::Result<Self> {
-        // Only SQL NULL maps to `None`; a missing column is a projection bug
-        // and propagates as an error rather than masquerading as NULL.
-        let field = row_field(row, col)?;
-        if is_null(field) { Ok(None) } else { T::fetch(row, col).map(Some) }
-    }
 }
 
 fn row_field<'a>(row: &'a Row, name: &str) -> Result<&'a DataType> {
