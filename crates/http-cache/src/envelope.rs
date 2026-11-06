@@ -50,37 +50,3 @@ impl TryFrom<Serialized> for Response<Bytes> {
         response.body(Bytes::from(s.body)).context("building response from cached data")
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use http::HeaderValue;
-    use http::header::{CONTENT_DISPOSITION, CONTENT_TYPE};
-
-    use super::*;
-
-    #[test]
-    fn obs_text_header_round_trips() {
-        // Latin-1 `é` (0xE9): valid `obs-text` per RFC 9110 §5.5, but not
-        // `str`, so a lossy `to_str()` would have blanked it.
-        let filename: &[u8] = b"attachment; filename=\"r\xE9sum\xE9.pdf\"";
-        let mut response = Response::new(Bytes::from_static(b"body"));
-        response.headers_mut().insert(CONTENT_TYPE, HeaderValue::from_static("text/plain"));
-        response
-            .headers_mut()
-            .insert(CONTENT_DISPOSITION, HeaderValue::from_bytes(filename).expect("obs-text"));
-
-        let stored = serialize(&response).expect("serializes");
-        let restored = deserialize(&stored).expect("deserializes");
-
-        assert_eq!(restored.status(), response.status());
-        assert_eq!(restored.body(), response.body());
-        assert_eq!(
-            restored.headers().get(CONTENT_DISPOSITION).map(HeaderValue::as_bytes),
-            Some(filename)
-        );
-        assert_eq!(
-            restored.headers().get(CONTENT_TYPE).map(HeaderValue::as_bytes),
-            Some(b"text/plain".as_slice())
-        );
-    }
-}

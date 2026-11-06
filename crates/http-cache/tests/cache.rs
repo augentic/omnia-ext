@@ -28,6 +28,10 @@ fn provider(status: StatusCode) -> Provider {
     *response.status_mut() = status;
     response.headers_mut().insert(ETAG, HeaderValue::from_static(ORIGIN_ETAG));
     response.headers_mut().insert(CONTENT_TYPE, HeaderValue::from_static("text/plain"));
+    response.headers_mut().insert(
+        http::header::CONTENT_DISPOSITION,
+        HeaderValue::from_bytes(b"attachment; filename=\"r\xE9sum\xE9.pdf\"").expect("obs-text"),
+    );
     Provider::default().http(MatchedHttp::default().on(Method::GET, URL, response))
 }
 
@@ -114,6 +118,10 @@ async fn max_age_miss_then_hit() {
     assert_eq!(
         hit.headers().get(CONTENT_TYPE).map(HeaderValue::as_bytes),
         Some(b"text/plain".as_slice())
+    );
+    assert_eq!(
+        hit.headers().get(http::header::CONTENT_DISPOSITION).map(HeaderValue::as_bytes),
+        Some(b"attachment; filename=\"r\xE9sum\xE9.pdf\"".as_slice())
     );
     assert_eq!(provider.http.requests().len(), 1);
 }
@@ -333,9 +341,19 @@ async fn malformed_directives_refused() {
     let provider = provider(StatusCode::OK);
     let cache = HttpCache::new(&provider, &provider);
 
-    let Err(_) = cache.fetch(request(&[(CACHE_CONTROL, "max-age=60")])).await else {
-        panic!("expected missing If-None-Match error");
-    };
+    for bad_headers in [
+        vec![(CACHE_CONTROL, "max-age=60")],
+        vec![(CACHE_CONTROL, "max-age=60, max-age=0"), (IF_NONE_MATCH, ETAG_V1)],
+        vec![(CACHE_CONTROL, "no-store, max-age=0"), (IF_NONE_MATCH, ETAG_V1)],
+        vec![(CACHE_CONTROL, "max-age=60"), (IF_NONE_MATCH, "W/\"weak\"")],
+        vec![(CACHE_CONTROL, "max-age=60"), (IF_NONE_MATCH, "\"a\", \"b\"")],
+        vec![(CACHE_CONTROL, "max-age=60"), (IF_NONE_MATCH, "*")],
+        vec![(CACHE_CONTROL, "max-age=60"), (IF_NONE_MATCH, "unquoted")],
+    ] {
+        let Err(_) = cache.fetch(request(&bad_headers)).await else {
+            panic!("expected malformed directives to be refused: {bad_headers:?}");
+        };
+    }
     assert!(provider.http.requests().is_empty());
     assert!(stored(&provider).is_none());
 }
