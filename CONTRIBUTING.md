@@ -1,6 +1,6 @@
 # Contributing
 
-Augentic welcomes community contributions to `omnia-extensions`. Discuss any non-trivial change in a GitHub issue first; [README.md](README.md#development) covers the toolchain and the development loop, and `make ci` is the whole gate.
+Augentic welcomes community contributions to `omnia-ext`. Discuss any non-trivial change in a GitHub issue first; [README.md](README.md#development) covers the toolchain and the development loop, and `make ci` is the whole gate.
 
 ## Developer's Certificate of Origin
 

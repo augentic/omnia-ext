@@ -7,9 +7,9 @@ authors = ["Augentic"]
 categories = ["wasm", "web-programming", "asynchronous"]
 edition = "2024"
 homepage = "https://augentic.io"
-keywords = ["extensions", "omnia", "wasi", "wasm", "component-model"]
+keywords = ["omnia", "wasi", "wasm", "component-model", "ext"]
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/augentic/omnia-extensions"
+repository = "https://github.com/augentic/omnia-ext"
 rust-version = "1.99"
 version = "0.36.0"
 
