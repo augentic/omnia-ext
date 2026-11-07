@@ -26,8 +26,10 @@ struct.
 
 ## Inbound subscriptions
 
-`omnia_dapr::axum::subscriptions(router, &dapr)` builds an `axum::Router`
-serving:
+`omnia_dapr::axum::subscriptions(router, &dapr)` takes the guest's
+`omnia_sdk::api::Router<P>` (its topics registered through
+`Handlers::topic` and closed with `Handlers::with_state`) and builds an
+`axum::Router` serving:
 
 - `GET /dapr/subscribe` — lists every topic from `router.topics()`.
 - `POST /dapr/events/{*topic}` — decodes structured or binary `CloudEvents` 1.0

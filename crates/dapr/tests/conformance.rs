@@ -20,8 +20,7 @@ use http_body::{Body as HttpBody, Frame};
 use http_body_util::{BodyExt as _, Full};
 use omnia_dapr::Dapr;
 use omnia_dapr::axum::subscriptions;
-use omnia_sdk::api::messaging::{Router as MessagingRouter, consume};
-use omnia_sdk::api::{Client, Context};
+use omnia_sdk::api::{Client, Context, Handlers, Router as OmniaRouter};
 use omnia_sdk::{BlobStore, Error, HttpRequest, StateStore};
 use omnia_test::conformance;
 use serde::Deserialize;
@@ -440,29 +439,24 @@ struct AppProvider {
     dapr: Dapr<LoopbackHttp>,
 }
 
-fn dapr_messaging_router(provider: AppProvider) -> MessagingRouter<AppProvider> {
-    MessagingRouter::new(Client::new("dapr-app", provider))
-        .route(
-            "orders.created",
-            consume(|order: String, cx: Context<AppProvider>| async move {
-                cx.provider()
-                    .set("orders/last", order.as_bytes(), None)
-                    .await
-                    .map_err(Error::from)?;
-                Ok::<_, Error>(())
-            }),
-        )
-        .route(
-            "iot/sensors/temp",
-            consume(|reading: String, cx: Context<AppProvider>| async move {
-                let req_id = cx.metadata.request_id.as_deref().unwrap_or("");
-                cx.provider()
-                    .set("iot/last", format!("{reading}:{req_id}").as_bytes(), None)
-                    .await
-                    .map_err(Error::from)?;
-                Ok::<_, Error>(())
-            }),
-        )
+async fn order_created(context: Context<AppProvider>, order: String) -> Result<(), Error> {
+    context.state().set("orders/last", order.as_bytes(), None).await.map_err(Error::from)
+}
+
+async fn temp_reading(context: Context<AppProvider>, reading: String) -> Result<(), Error> {
+    let req_id = context.metadata.request_id.as_deref().unwrap_or("");
+    context
+        .state()
+        .set("iot/last", format!("{reading}:{req_id}").as_bytes(), None)
+        .await
+        .map_err(Error::from)
+}
+
+fn dapr_messaging_router(provider: AppProvider) -> OmniaRouter<AppProvider> {
+    Handlers::new()
+        .topic("orders.created", order_created)
+        .topic("iot/sensors/temp", temp_reading)
+        .with_state(Client::new(provider))
 }
 
 async fn send_json(app: &Router, req: Request<axum::body::Body>) -> Value {
