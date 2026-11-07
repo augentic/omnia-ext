@@ -11,19 +11,6 @@ pub struct Join {
     kind: JoinKind,
 }
 
-/// Join types supported by the ORM.
-#[derive(Clone, Copy)]
-pub enum JoinKind {
-    /// `INNER JOIN`
-    Inner,
-    /// `LEFT JOIN`
-    Left,
-    /// `RIGHT JOIN`
-    Right,
-    /// `FULL OUTER JOIN`
-    Full,
-}
-
 impl Join {
     /// Creates a JOIN of the given kind.
     #[must_use]
@@ -79,6 +66,19 @@ impl Join {
     pub const fn full(table: &'static str, on: Filter) -> Self {
         Self::new(table, JoinKind::Full, on)
     }
+}
+
+/// Join types supported by the ORM.
+#[derive(Clone, Copy)]
+pub enum JoinKind {
+    /// `INNER JOIN`
+    Inner,
+    /// `LEFT JOIN`
+    Left,
+    /// `RIGHT JOIN`
+    Right,
+    /// `FULL OUTER JOIN`
+    Full,
 }
 
 impl JoinKind {

@@ -126,10 +126,7 @@ async fn select_with_filter() {
         .limit(10)
         .build()
         .expect("select builds");
-    let rows = provider
-        .query(CONNECTION.to_owned(), query.sql, query.params)
-        .await
-        .expect("scripted query");
+    let rows = provider.query(CONNECTION, &query.sql, &query.params).await.expect("scripted query");
 
     let statement = only_statement(&provider);
     assert_eq!(statement.connection, CONNECTION);
@@ -162,7 +159,7 @@ async fn insert_from_entity() {
 
     let query = InsertBuilder::<Agency>::from_entity(&agency).build().expect("insert builds");
     let affected =
-        provider.exec(CONNECTION.to_owned(), query.sql, query.params).await.expect("scripted exec");
+        provider.exec(CONNECTION, &query.sql, &query.params).await.expect("scripted exec");
     assert_eq!(affected, 1);
 
     // Every field travels, in declaration order; `None` is a typed NULL and
@@ -191,7 +188,7 @@ async fn upsert_on_conflict() {
         .do_update_all()
         .build()
         .expect("upsert builds");
-    provider.exec(CONNECTION.to_owned(), query.sql, query.params).await.expect("scripted exec");
+    provider.exec(CONNECTION, &query.sql, &query.params).await.expect("scripted exec");
 
     let statement = only_statement(&provider);
     assert_eq!(
@@ -213,7 +210,7 @@ async fn update_set_with_filter() {
         .build()
         .expect("update builds");
     let affected =
-        provider.exec(CONNECTION.to_owned(), query.sql, query.params).await.expect("scripted exec");
+        provider.exec(CONNECTION, &query.sql, &query.params).await.expect("scripted exec");
 
     // The affected-row count is the caller's not-found signal.
     assert_eq!(affected, 0);
@@ -238,7 +235,7 @@ async fn delete_with_filter() {
         .build()
         .expect("delete builds");
     let affected =
-        provider.exec(CONNECTION.to_owned(), query.sql, query.params).await.expect("scripted exec");
+        provider.exec(CONNECTION, &query.sql, &query.params).await.expect("scripted exec");
     assert_eq!(affected, 1);
 
     let statement = only_statement(&provider);
@@ -250,7 +247,7 @@ async fn delete_with_filter() {
 }
 
 #[tokio::test]
-async fn select_join_with_aliased_columns() {
+async fn join_alias_cols() {
     let scripted = ScriptedTables::default().on_query(
         |sql, _| sql.contains("LEFT JOIN"),
         vec![row(vec![
@@ -266,10 +263,7 @@ async fn select_join_with_aliased_columns() {
         .limit(100)
         .build()
         .expect("join select builds");
-    let rows = provider
-        .query(CONNECTION.to_owned(), query.sql, query.params)
-        .await
-        .expect("scripted query");
+    let rows = provider.query(CONNECTION, &query.sql, &query.params).await.expect("scripted query");
 
     // The entity's default join and the aliased projection come from
     // `entity!`; the caller only adds ordering and a limit.
@@ -290,7 +284,7 @@ async fn select_join_with_aliased_columns() {
 }
 
 #[tokio::test]
-async fn missing_column_fails_row_mapping() {
+async fn map_missing_col() {
     // A projection bug, not a NULL: the row lacks `url` entirely, so even
     // the `Option<String>` field refuses to map.
     let scripted = ScriptedTables::default().on_query(
@@ -304,11 +298,14 @@ async fn missing_column_fails_row_mapping() {
     let provider = Provider::default().tables(scripted);
 
     let query = SelectBuilder::<Agency>::new().build().expect("select builds");
-    let rows = provider
-        .query(CONNECTION.to_owned(), query.sql, query.params)
-        .await
-        .expect("scripted query");
+    let rows = provider.query(CONNECTION, &query.sql, &query.params).await.expect("scripted query");
 
     let err = Agency::from_row(&rows[0]).expect_err("missing column");
     assert!(err.to_string().contains("missing column 'url'"), "{err}");
+
+    assert!(
+        UpdateBuilder::<Agency>::new().r#where(Filter::eq("agency_id", 7_i64)).build().is_err()
+    );
+    assert!(UpdateBuilder::<Agency>::new().set("name", "x").build().is_err());
+    assert!(DeleteBuilder::<Feed>::new().build().is_err());
 }

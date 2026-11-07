@@ -28,6 +28,10 @@ fn provider(status: StatusCode) -> Provider {
     *response.status_mut() = status;
     response.headers_mut().insert(ETAG, HeaderValue::from_static(ORIGIN_ETAG));
     response.headers_mut().insert(CONTENT_TYPE, HeaderValue::from_static("text/plain"));
+    response.headers_mut().insert(
+        http::header::CONTENT_DISPOSITION,
+        HeaderValue::from_bytes(b"attachment; filename=\"r\xE9sum\xE9.pdf\"").expect("obs-text"),
+    );
     Provider::default().http(MatchedHttp::default().on(Method::GET, URL, response))
 }
 
@@ -115,6 +119,10 @@ async fn max_age_miss_then_hit() {
         hit.headers().get(CONTENT_TYPE).map(HeaderValue::as_bytes),
         Some(b"text/plain".as_slice())
     );
+    assert_eq!(
+        hit.headers().get(http::header::CONTENT_DISPOSITION).map(HeaderValue::as_bytes),
+        Some(b"attachment; filename=\"r\xE9sum\xE9.pdf\"".as_slice())
+    );
     assert_eq!(provider.http.requests().len(), 1);
 }
 
@@ -137,7 +145,7 @@ async fn no_cache_refreshes() {
 }
 
 #[tokio::test]
-async fn cache_control_split_across_lines() {
+async fn cache_ctrl_multiline() {
     let provider = provider(StatusCode::OK);
     let cache = HttpCache::new(&provider, &provider);
 
@@ -163,7 +171,7 @@ async fn cache_control_split_across_lines() {
 }
 
 #[tokio::test]
-async fn no_cache_alone_bypasses_without_writing() {
+async fn no_cache_bypass() {
     let provider = provider(StatusCode::OK);
     let cache = HttpCache::new(&provider, &provider);
     let headers = [(CACHE_CONTROL, "no-cache"), (IF_NONE_MATCH, ETAG_V1)];
@@ -231,7 +239,7 @@ async fn non_success_not_stored() {
 }
 
 #[tokio::test]
-async fn partial_content_not_stored() {
+async fn partial_not_stored() {
     let provider = provider(StatusCode::PARTIAL_CONTENT);
     let cache = HttpCache::new(&provider, &provider);
     let headers = [(CACHE_CONTROL, "max-age=60"), (IF_NONE_MATCH, ETAG_V1)];
@@ -248,7 +256,7 @@ async fn partial_content_not_stored() {
 }
 
 #[tokio::test]
-async fn corrupt_entry_is_a_miss_and_replaced() {
+async fn corrupt_replaced() {
     let provider = provider(StatusCode::OK);
     let cache = HttpCache::new(&provider, &provider);
     let headers = [(CACHE_CONTROL, "max-age=60"), (IF_NONE_MATCH, ETAG_V1)];
@@ -270,7 +278,7 @@ async fn corrupt_entry_is_a_miss_and_replaced() {
 }
 
 #[tokio::test]
-async fn store_outage_degrades_to_origin() {
+async fn store_out_origin() {
     let provider = provider(StatusCode::OK);
     let cache = HttpCache::new(&provider, BrokenStore);
     let headers = [(CACHE_CONTROL, "max-age=60"), (IF_NONE_MATCH, ETAG_V1)];
@@ -287,7 +295,7 @@ async fn store_outage_degrades_to_origin() {
 }
 
 #[tokio::test]
-async fn without_cache_control_passes_through() {
+async fn no_cache_control() {
     let provider = provider(StatusCode::OK);
     let cache = HttpCache::new(&provider, &provider);
 
@@ -304,7 +312,7 @@ async fn without_cache_control_passes_through() {
 }
 
 #[tokio::test]
-async fn unrecognised_directives_pass_through() {
+async fn unknown_directives() {
     let provider = provider(StatusCode::OK);
     let cache = HttpCache::new(&provider, &provider);
 
@@ -329,13 +337,23 @@ async fn unrecognised_directives_pass_through() {
 }
 
 #[tokio::test]
-async fn malformed_directives_refused() {
+async fn bad_directives() {
     let provider = provider(StatusCode::OK);
     let cache = HttpCache::new(&provider, &provider);
 
-    let Err(_) = cache.fetch(request(&[(CACHE_CONTROL, "max-age=60")])).await else {
-        panic!("expected missing If-None-Match error");
-    };
+    for bad_headers in [
+        vec![(CACHE_CONTROL, "max-age=60")],
+        vec![(CACHE_CONTROL, "max-age=60, max-age=0"), (IF_NONE_MATCH, ETAG_V1)],
+        vec![(CACHE_CONTROL, "no-store, max-age=0"), (IF_NONE_MATCH, ETAG_V1)],
+        vec![(CACHE_CONTROL, "max-age=60"), (IF_NONE_MATCH, "W/\"weak\"")],
+        vec![(CACHE_CONTROL, "max-age=60"), (IF_NONE_MATCH, "\"a\", \"b\"")],
+        vec![(CACHE_CONTROL, "max-age=60"), (IF_NONE_MATCH, "*")],
+        vec![(CACHE_CONTROL, "max-age=60"), (IF_NONE_MATCH, "unquoted")],
+    ] {
+        let Err(_) = cache.fetch(request(&bad_headers)).await else {
+            panic!("expected malformed directives to be refused: {bad_headers:?}");
+        };
+    }
     assert!(provider.http.requests().is_empty());
     assert!(stored(&provider).is_none());
 }

@@ -1,4 +1,4 @@
-# Omnia Extensions
+# omnia-ext
 
 Guest-side libraries that compose on [omnia](https://github.com/augentic/omnia)
 capability traits. They are not part of the runtime: omnia never depends on

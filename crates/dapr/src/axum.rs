@@ -7,7 +7,8 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use bytes::Bytes;
 use http::HeaderMap;
-use omnia_sdk::api::messaging::{DeliveryError, Router as MessagingRouter};
+use omnia_sdk::api::Router as OmniaRouter;
+use omnia_sdk::api::messaging::DeliveryError;
 use serde::Serialize;
 
 use crate::{Dapr, cloudevents};
@@ -25,13 +26,13 @@ struct EventAck {
 }
 
 struct BridgeState<P: Send + Sync + 'static> {
-    router: MessagingRouter<P>,
+    router: OmniaRouter<P>,
     subscriptions: Vec<Subscription>,
 }
 
 /// Builds an [`axum::Router`] that exposes Dapr programmatic subscriptions for
-/// `router` and dispatches inbound `CloudEvents` 1.0 deliveries into
-/// [`MessagingRouter::handle`].
+/// the topics registered on `router` and dispatches inbound `CloudEvents` 1.0
+/// deliveries into [`OmniaRouter::handle`].
 ///
 /// Mounts two routes:
 ///
@@ -39,7 +40,7 @@ struct BridgeState<P: Send + Sync + 'static> {
 ///   [`Dapr::pubsub`].
 /// - `POST /dapr/events/{*topic}` decoding structured or binary `CloudEvents`
 ///   1.0 requests and returning `{"status": "SUCCESS" | "RETRY" | "DROP"}`.
-pub fn subscriptions<P, H>(router: MessagingRouter<P>, dapr: &Dapr<H>) -> Router
+pub fn subscriptions<P, H>(router: OmniaRouter<P>, dapr: &Dapr<H>) -> Router
 where
     P: Send + Sync + 'static,
 {

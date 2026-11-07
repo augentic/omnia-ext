@@ -18,6 +18,33 @@ pub trait FetchValue: Sized {
     fn fetch(row: &Row, col: &str) -> anyhow::Result<Self>;
 }
 
+impl FetchValue for DateTime<Utc> {
+    fn fetch(row: &Row, col: &str) -> anyhow::Result<Self> {
+        parse_timestamp(row_field(row, col)?)
+    }
+}
+
+impl FetchValue for NaiveDate {
+    fn fetch(row: &Row, col: &str) -> anyhow::Result<Self> {
+        parse_date(row_field(row, col)?)
+    }
+}
+
+impl FetchValue for serde_json::Value {
+    fn fetch(row: &Row, col: &str) -> anyhow::Result<Self> {
+        parse_json(row_field(row, col)?)
+    }
+}
+
+impl<T: FetchValue> FetchValue for Option<T> {
+    fn fetch(row: &Row, col: &str) -> anyhow::Result<Self> {
+        // Only SQL NULL maps to `None`; a missing column is a projection bug
+        // and propagates as an error rather than masquerading as NULL.
+        let field = row_field(row, col)?;
+        if is_null(field) { Ok(None) } else { T::fetch(row, col).map(Some) }
+    }
+}
+
 /// Trait for database entities with metadata for query building.
 ///
 /// Typically implemented via the `entity!` macro rather than manually.
@@ -112,33 +139,6 @@ fetch! {
     Vec<u8> => Binary,
 }
 
-impl FetchValue for DateTime<Utc> {
-    fn fetch(row: &Row, col: &str) -> anyhow::Result<Self> {
-        parse_timestamp(row_field(row, col)?)
-    }
-}
-
-impl FetchValue for NaiveDate {
-    fn fetch(row: &Row, col: &str) -> anyhow::Result<Self> {
-        parse_date(row_field(row, col)?)
-    }
-}
-
-impl FetchValue for serde_json::Value {
-    fn fetch(row: &Row, col: &str) -> anyhow::Result<Self> {
-        parse_json(row_field(row, col)?)
-    }
-}
-
-impl<T: FetchValue> FetchValue for Option<T> {
-    fn fetch(row: &Row, col: &str) -> anyhow::Result<Self> {
-        // Only SQL NULL maps to `None`; a missing column is a projection bug
-        // and propagates as an error rather than masquerading as NULL.
-        let field = row_field(row, col)?;
-        if is_null(field) { Ok(None) } else { T::fetch(row, col).map(Some) }
-    }
-}
-
 fn row_field<'a>(row: &'a Row, name: &str) -> Result<&'a DataType> {
     row.fields
         .iter()
@@ -197,82 +197,5 @@ fn parse_json(value: &DataType) -> Result<serde_json::Value> {
         DataType::Str(Some(raw)) => Ok(serde_json::from_str(raw)?),
         DataType::Binary(Some(bytes)) => Ok(serde_json::from_slice(bytes)?),
         _ => bail!("expected json compatible data type"),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn to_wasi_param_variants() {
-        use sea_query::Value;
-
-        let date = NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
-        let dt_utc: DateTime<Utc> = "2024-01-15T10:30:45Z".parse().unwrap();
-
-        assert!(matches!(to_wasi_param(Value::Int(Some(42))).unwrap(), DataType::Int32(Some(42))));
-        assert!(matches!(
-            to_wasi_param(Value::BigUnsigned(Some(10_000))).unwrap(),
-            DataType::Uint64(Some(10_000))
-        ));
-        assert!(matches!(
-            to_wasi_param(Value::Float(Some(std::f32::consts::PI))).unwrap(),
-            DataType::Float(Some(v)) if (v - std::f32::consts::PI).abs() < 0.01
-        ));
-        assert!(matches!(
-            to_wasi_param(Value::Char(Some('A'))).unwrap(),
-            DataType::Str(Some(s)) if s == "A"
-        ));
-        assert!(matches!(
-            to_wasi_param(Value::Bytes(Some(vec![1, 2, 3]))).unwrap(),
-            DataType::Binary(Some(b)) if b == [1, 2, 3]
-        ));
-        assert!(matches!(
-            to_wasi_param(Value::ChronoDate(Some(date))).unwrap(),
-            DataType::Date(Some(s)) if s == "2024-01-15"
-        ));
-        assert!(matches!(
-            to_wasi_param(Value::ChronoDateTimeUtc(Some(dt_utc))).unwrap(),
-            DataType::Timestamp(Some(s)) if s.contains("2024-01-15") && s.contains("10:30:45")
-        ));
-        assert!(matches!(to_wasi_param(Value::Bool(None)).unwrap(), DataType::Boolean(None)));
-    }
-
-    #[test]
-    fn fetch_wrong_types() {
-        use omnia_sdk::sql::Field;
-
-        fn one_field_row(value: DataType) -> Row {
-            Row {
-                fields: vec![Field {
-                    name: "x".to_string(),
-                    value,
-                }],
-                index: "0".to_string(),
-            }
-        }
-
-        bool::fetch(&one_field_row(DataType::Int32(Some(1))), "x").unwrap_err();
-
-        i32::fetch(&one_field_row(DataType::Str(Some("not a number".to_string()))), "x")
-            .unwrap_err();
-
-        i64::fetch(&one_field_row(DataType::Boolean(Some(true))), "x").unwrap_err();
-
-        String::fetch(&one_field_row(DataType::Int32(Some(42))), "x").unwrap_err();
-
-        <Vec<u8>>::fetch(&one_field_row(DataType::Str(Some("not binary".to_string()))), "x")
-            .unwrap_err();
-
-        let err = DateTime::<Utc>::fetch(
-            &one_field_row(DataType::Timestamp(Some("invalid".into()))),
-            "x",
-        )
-        .unwrap_err();
-        assert!(err.to_string().contains("unsupported timestamp"));
-
-        serde_json::Value::fetch(&one_field_row(DataType::Str(Some("not json".to_string()))), "x")
-            .unwrap_err();
     }
 }

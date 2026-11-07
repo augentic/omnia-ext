@@ -8,32 +8,38 @@
 
 #![cfg(target_arch = "wasm32")]
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context as _, anyhow};
+use axum::Json;
 use axum::extract::Path;
 use axum::routing::{delete, get, patch, post};
-use axum::{Json, Router};
 use chrono::Utc;
 use omnia_orm::{
     DeleteBuilder, Entity, Filter, InsertBuilder, Join, SelectBuilder, UpdateBuilder, entity,
 };
-use omnia_sdk::{HttpResult, TableStore, WasiProvider};
+use omnia_sdk::api::{Client, Context, Handlers, Router};
+use omnia_sdk::{TableStore, WasiProvider};
 use omnia_wasi_sql::readwrite;
 use omnia_wasi_sql::types::{Connection, Statement};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-omnia_sdk::http!(
-    Router::new()
+const CONNECTION: &str = "db";
+
+omnia_sdk::api::http::export!(router);
+
+fn router(provider: WasiProvider) -> Router<WasiProvider> {
+    Handlers::new()
         .route("/agencies", get(list_agencies).post(create_agency))
         .route("/agencies/{id}", patch(update_agency))
         .route("/agencies/{id}/feeds", post(create_feed))
         .route("/feeds", get(list_all_feeds))
         .route("/feeds/{id}", delete(delete_feed))
-);
+        .with_state(Client::new(provider))
+}
 
 /// List all agencies (`SelectBuilder`).
 #[omnia_wasi_otel::instrument]
-async fn list_agencies() -> HttpResult<Json<Value>> {
+async fn list_agencies(context: Context<WasiProvider>) -> omnia_sdk::Result<Json<Value>> {
     ensure_schema().await?;
 
     let select = SelectBuilder::<Agency>::new()
@@ -41,20 +47,26 @@ async fn list_agencies() -> HttpResult<Json<Value>> {
         .build()
         .context("building query")?;
 
-    let rows = WasiProvider
-        .query("db".to_string(), select.sql, select.params)
+    let rows = context
+        .tables()
+        .query(CONNECTION, &select.sql, &select.params)
         .await
         .context("executing query")?;
 
-    let agencies =
-        rows.iter().map(Agency::from_row).collect::<Result<Vec<_>>>().context("mapping rows")?;
+    let agencies = rows
+        .iter()
+        .map(Agency::from_row)
+        .collect::<anyhow::Result<Vec<_>>>()
+        .context("mapping rows")?;
 
     Ok(Json(json!({ "agencies": agencies })))
 }
 
 /// Create an agency with a client-supplied id (`InsertBuilder`).
 #[omnia_wasi_otel::instrument]
-async fn create_agency(Json(req): Json<CreateAgencyRequest>) -> HttpResult<Json<Value>> {
+async fn create_agency(
+    context: Context<WasiProvider>, Json(req): Json<CreateAgencyRequest>,
+) -> omnia_sdk::Result<Json<Value>> {
     ensure_schema().await?;
 
     let agency = Agency {
@@ -67,8 +79,9 @@ async fn create_agency(Json(req): Json<CreateAgencyRequest>) -> HttpResult<Json<
 
     let query = InsertBuilder::<Agency>::from_entity(&agency).build().context("building insert")?;
 
-    WasiProvider
-        .exec("db".to_string(), query.sql, query.params)
+    context
+        .tables()
+        .exec(CONNECTION, &query.sql, &query.params)
         .await
         .context("inserting agency")?;
 
@@ -78,8 +91,8 @@ async fn create_agency(Json(req): Json<CreateAgencyRequest>) -> HttpResult<Json<
 /// Update an agency's mutable fields (`UpdateBuilder`).
 #[omnia_wasi_otel::instrument]
 async fn update_agency(
-    Path(id): Path<i64>, Json(req): Json<UpdateAgencyRequest>,
-) -> HttpResult<Json<Value>> {
+    context: Context<WasiProvider>, Path(id): Path<i64>, Json(req): Json<UpdateAgencyRequest>,
+) -> omnia_sdk::Result<Json<Value>> {
     ensure_schema().await?;
 
     let query = UpdateBuilder::<Agency>::new()
@@ -89,8 +102,9 @@ async fn update_agency(
         .build()
         .context("building update")?;
 
-    let rows_affected = WasiProvider
-        .exec("db".to_string(), query.sql, query.params)
+    let rows_affected = context
+        .tables()
+        .exec(CONNECTION, &query.sql, &query.params)
         .await
         .context("updating agency")?;
 
@@ -104,8 +118,8 @@ async fn update_agency(
 /// Create a feed for an existing agency (`InsertBuilder` + existence check).
 #[omnia_wasi_otel::instrument]
 async fn create_feed(
-    Path(agency_id): Path<i64>, Json(req): Json<CreateFeedRequest>,
-) -> HttpResult<Json<Value>> {
+    context: Context<WasiProvider>, Path(agency_id): Path<i64>, Json(req): Json<CreateFeedRequest>,
+) -> omnia_sdk::Result<Json<Value>> {
     ensure_schema().await?;
 
     let select = SelectBuilder::<Agency>::new()
@@ -114,8 +128,9 @@ async fn create_feed(
         .build()
         .context("building agency lookup")?;
 
-    let rows = WasiProvider
-        .query("db".to_string(), select.sql, select.params)
+    let rows = context
+        .tables()
+        .query(CONNECTION, &select.sql, &select.params)
         .await
         .context("executing agency lookup")?;
 
@@ -132,14 +147,14 @@ async fn create_feed(
 
     let query = InsertBuilder::<Feed>::from_entity(&feed).build().context("building insert")?;
 
-    WasiProvider.exec("db".to_string(), query.sql, query.params).await.context("inserting feed")?;
+    context.tables().exec(CONNECTION, &query.sql, &query.params).await.context("inserting feed")?;
 
     Ok(Json(json!({ "feed": feed })))
 }
 
 /// List all feeds with their agency information (`entity!` JOIN).
 #[omnia_wasi_otel::instrument]
-async fn list_all_feeds() -> HttpResult<Json<Value>> {
+async fn list_all_feeds(context: Context<WasiProvider>) -> omnia_sdk::Result<Json<Value>> {
     ensure_schema().await?;
 
     let select = SelectBuilder::<FeedWithAgency>::new()
@@ -148,15 +163,16 @@ async fn list_all_feeds() -> HttpResult<Json<Value>> {
         .build()
         .context("building join query")?;
 
-    let rows = WasiProvider
-        .query("db".to_string(), select.sql, select.params)
+    let rows = context
+        .tables()
+        .query(CONNECTION, &select.sql, &select.params)
         .await
         .context("executing join query")?;
 
     let feeds = rows
         .iter()
         .map(FeedWithAgency::from_row)
-        .collect::<Result<Vec<_>>>()
+        .collect::<anyhow::Result<Vec<_>>>()
         .context("mapping rows")?;
 
     Ok(Json(json!({ "feeds": feeds })))
@@ -164,7 +180,9 @@ async fn list_all_feeds() -> HttpResult<Json<Value>> {
 
 /// Delete a feed (`DeleteBuilder`).
 #[omnia_wasi_otel::instrument]
-async fn delete_feed(Path(id): Path<i64>) -> HttpResult<Json<Value>> {
+async fn delete_feed(
+    context: Context<WasiProvider>, Path(id): Path<i64>,
+) -> omnia_sdk::Result<Json<Value>> {
     ensure_schema().await?;
 
     let query = DeleteBuilder::<Feed>::new()
@@ -172,8 +190,9 @@ async fn delete_feed(Path(id): Path<i64>) -> HttpResult<Json<Value>> {
         .build()
         .context("building delete")?;
 
-    let rows_affected = WasiProvider
-        .exec("db".to_string(), query.sql, query.params)
+    let rows_affected = context
+        .tables()
+        .exec(CONNECTION, &query.sql, &query.params)
         .await
         .context("deleting feed")?;
 
@@ -186,8 +205,8 @@ async fn delete_feed(Path(id): Path<i64>) -> HttpResult<Json<Value>> {
 
 /// Create the schema with raw prepared statements. Each request is handled by
 /// a fresh guest instance, so this runs per request — fine for an example.
-async fn ensure_schema() -> Result<()> {
-    let pool = Connection::open("db".to_string())
+async fn ensure_schema() -> anyhow::Result<()> {
+    let pool = Connection::open(CONNECTION.to_string())
         .await
         .map_err(|e| anyhow!("opening connection: {}", e.trace()))?;
 

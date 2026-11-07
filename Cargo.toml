@@ -7,9 +7,9 @@ authors = ["Augentic"]
 categories = ["wasm", "web-programming", "asynchronous"]
 edition = "2024"
 homepage = "https://augentic.io"
-keywords = ["extensions", "omnia", "wasi", "wasm", "component-model"]
+keywords = ["omnia", "wasi", "wasm", "component-model", "ext"]
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/augentic/omnia-extensions"
+repository = "https://github.com/augentic/omnia-ext"
 rust-version = "1.99"
 version = "0.36.0"
 
@@ -57,7 +57,7 @@ thiserror = "2.0.21"
 tokio = { version = "1.54.1", default-features = false }
 tower = "0.5.3"
 tracing = "0.1.44"
-wasip3 = { version = "0.9.0", features = ["http-compat"] }
+wasip3 = { version = "0.10.0", features = ["http-compat"] }
 
 omnia = "0.38.0"
 omnia-sdk = { version = "0.38.0", default-features = false }

@@ -24,16 +24,6 @@ pub struct InsertBuilder<M: Entity, C = NoConflict> {
     _marker: PhantomData<(M, C)>,
 }
 
-struct Conflict {
-    target: Vec<&'static str>,
-    action: ConflictAction,
-}
-
-enum ConflictAction {
-    Nothing,
-    Update(Vec<&'static str>),
-}
-
 impl<M: Entity> Default for InsertBuilder<M, NoConflict> {
     fn default() -> Self {
         Self {
@@ -165,4 +155,14 @@ impl<M: Entity, C> InsertBuilder<M, C> {
 
         finish(&statement, M::TABLE, "insert")
     }
+}
+
+struct Conflict {
+    target: Vec<&'static str>,
+    action: ConflictAction,
+}
+
+enum ConflictAction {
+    Nothing,
+    Update(Vec<&'static str>),
 }
