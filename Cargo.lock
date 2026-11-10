@@ -2212,27 +2212,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "omnia-dapr"
-version = "0.36.0"
-dependencies = [
- "anyhow",
- "axum",
- "base64ct",
- "bytes",
- "http",
- "http-body",
- "http-body-util",
- "omnia-sdk",
- "omnia-test",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
- "tokio",
- "tower",
- "tracing",
-]
-
-[[package]]
 name = "omnia-guest-macros"
 version = "0.38.0"
 source = "git+https://github.com/augentic/omnia#bcd5b17f62e719e2a58fa8d4649358d72fef2c1c"

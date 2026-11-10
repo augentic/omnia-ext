@@ -42,7 +42,6 @@ unused_result_ok = "warn"
 [workspace.dependencies]
 anyhow = "1.0.104"
 axum = { version = "0.8.9", default-features = false, features = ["json"] }
-base64ct = { version = "1.8.3", features = ["std"] }
 bytes = "1.12.1"
 chrono = "0.4.45"
 http = "1.5.0"
@@ -53,9 +52,7 @@ hyper-util = "0.1.21"
 sea-query = { version = "1.0.2", default-features = false, features = ["thread-safe", "with-chrono"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
-thiserror = "2.0.21"
 tokio = { version = "1.54.1", default-features = false }
-tower = "0.5.3"
 tracing = "0.1.44"
 wasip3 = { version = "0.10.0", features = ["http-compat"] }
 
@@ -68,7 +65,6 @@ omnia-wasi-keyvalue = "0.38.0"
 omnia-wasi-otel = "0.38.0"
 omnia-wasi-sql = "0.38.0"
 
-omnia-dapr = { path = "crates/dapr", version = "0.36.0" }
 omnia-http-cache = { path = "crates/http-cache", version = "0.36.0" }
 omnia-orm = { path = "crates/orm", version = "0.36.0" }
 

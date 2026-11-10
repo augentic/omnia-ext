@@ -19,7 +19,6 @@ and are a host-side concern; nothing here talks to them.
 
 | Crate | Description |
 | --- | --- |
-| [`omnia-dapr`](crates/dapr) | `Dapr<H>` sidecar provider implementing `StateStore`, `Publish`, `Config`, and basic `BlobStore` operations over Dapr HTTP v1.0, plus `axum::subscriptions` for inbound CloudEvents 1.0 deliveries. |
 | [`omnia-http-cache`](crates/http-cache) | `HttpCache<H, S>` decorator over `HttpRequest` + `StateStore`. Requests carrying `Cache-Control` and `If-None-Match` are answered from, and written back through, the injected store. |
 | [`omnia-orm`](crates/orm) | `entity!` mapping and typed `SELECT` / `INSERT` / `UPDATE` / `DELETE` builders that render parameterized SQL for `TableStore` to execute over `wasi:sql`. |
 
