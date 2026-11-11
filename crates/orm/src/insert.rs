@@ -24,16 +24,6 @@ pub struct InsertBuilder<M: Entity, C = NoConflict> {
     _marker: PhantomData<(M, C)>,
 }
 
-impl<M: Entity> Default for InsertBuilder<M, NoConflict> {
-    fn default() -> Self {
-        Self {
-            values: Vec::new(),
-            conflict: None,
-            _marker: PhantomData,
-        }
-    }
-}
-
 impl<M: Entity> InsertBuilder<M, NoConflict> {
     /// Creates a new INSERT query builder.
     #[must_use]
@@ -154,6 +144,16 @@ impl<M: Entity, C> InsertBuilder<M, C> {
         }
 
         finish(&statement, M::TABLE, "insert")
+    }
+}
+
+impl<M: Entity> Default for InsertBuilder<M, NoConflict> {
+    fn default() -> Self {
+        Self {
+            values: Vec::new(),
+            conflict: None,
+            _marker: PhantomData,
+        }
     }
 }
 

@@ -14,16 +14,6 @@ pub struct DeleteBuilder<M: Entity> {
     _marker: PhantomData<M>,
 }
 
-impl<M: Entity> Default for DeleteBuilder<M> {
-    fn default() -> Self {
-        Self {
-            filters: Vec::new(),
-            returning: Vec::new(),
-            _marker: PhantomData,
-        }
-    }
-}
-
 impl<M: Entity> DeleteBuilder<M> {
     /// Creates a new DELETE query builder.
     #[must_use]
@@ -69,5 +59,15 @@ impl<M: Entity> DeleteBuilder<M> {
         }
 
         finish(&statement, M::TABLE, "delete")
+    }
+}
+
+impl<M: Entity> Default for DeleteBuilder<M> {
+    fn default() -> Self {
+        Self {
+            filters: Vec::new(),
+            returning: Vec::new(),
+            _marker: PhantomData,
+        }
     }
 }

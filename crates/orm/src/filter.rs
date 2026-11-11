@@ -107,14 +107,6 @@ impl Filter {
     }
 }
 
-impl Not for Filter {
-    type Output = Self;
-
-    fn not(self) -> Self::Output {
-        Self(FilterKind::Not(Box::new(self)))
-    }
-}
-
 impl Filter {
     /// Qualifies an existing filter with a specific table name.
     ///
@@ -260,6 +252,14 @@ impl Filter {
             CmpOp::Eq,
             ColRef::qualified(table2, col2),
         ))
+    }
+}
+
+impl Not for Filter {
+    type Output = Self;
+
+    fn not(self) -> Self::Output {
+        Self(FilterKind::Not(Box::new(self)))
     }
 }
 
