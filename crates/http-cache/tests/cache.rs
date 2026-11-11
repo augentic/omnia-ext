@@ -127,7 +127,7 @@ async fn max_age_miss_then_hit() {
 }
 
 #[tokio::test]
-async fn no_cache_refreshes() {
+async fn no_cache_max_age() {
     let provider = provider(StatusCode::OK);
     let cache = HttpCache::new(&provider, &provider);
     let headers = [(CACHE_CONTROL, "no-cache, max-age=60"), (IF_NONE_MATCH, ETAG_V1)];
@@ -145,7 +145,7 @@ async fn no_cache_refreshes() {
 }
 
 #[tokio::test]
-async fn cache_ctrl_multiline() {
+async fn multiline_cache_control() {
     let provider = provider(StatusCode::OK);
     let cache = HttpCache::new(&provider, &provider);
 
@@ -171,7 +171,7 @@ async fn cache_ctrl_multiline() {
 }
 
 #[tokio::test]
-async fn no_cache_bypass() {
+async fn no_cache() {
     let provider = provider(StatusCode::OK);
     let cache = HttpCache::new(&provider, &provider);
     let headers = [(CACHE_CONTROL, "no-cache"), (IF_NONE_MATCH, ETAG_V1)];
@@ -189,7 +189,7 @@ async fn no_cache_bypass() {
 }
 
 #[tokio::test]
-async fn zero_max_age_revalidates() {
+async fn zero_max_age() {
     let provider = provider(StatusCode::OK);
     let cache = HttpCache::new(&provider, &provider);
     let headers = [(CACHE_CONTROL, "max-age=0"), (IF_NONE_MATCH, ETAG_V1)];
@@ -209,7 +209,7 @@ async fn zero_max_age_revalidates() {
 }
 
 #[tokio::test]
-async fn no_store_bypasses() {
+async fn no_store() {
     let provider = provider(StatusCode::OK);
     let cache = HttpCache::new(&provider, &provider);
     let headers = [(CACHE_CONTROL, "no-store"), (IF_NONE_MATCH, ETAG_V1)];
@@ -225,7 +225,7 @@ async fn no_store_bypasses() {
 }
 
 #[tokio::test]
-async fn non_success_not_stored() {
+async fn server_error() {
     let provider = provider(StatusCode::INTERNAL_SERVER_ERROR);
     let cache = HttpCache::new(&provider, &provider);
     let headers = [(CACHE_CONTROL, "max-age=60"), (IF_NONE_MATCH, ETAG_V1)];
@@ -239,7 +239,7 @@ async fn non_success_not_stored() {
 }
 
 #[tokio::test]
-async fn partial_not_stored() {
+async fn partial_content() {
     let provider = provider(StatusCode::PARTIAL_CONTENT);
     let cache = HttpCache::new(&provider, &provider);
     let headers = [(CACHE_CONTROL, "max-age=60"), (IF_NONE_MATCH, ETAG_V1)];
@@ -256,7 +256,7 @@ async fn partial_not_stored() {
 }
 
 #[tokio::test]
-async fn corrupt_replaced() {
+async fn corrupt_entry() {
     let provider = provider(StatusCode::OK);
     let cache = HttpCache::new(&provider, &provider);
     let headers = [(CACHE_CONTROL, "max-age=60"), (IF_NONE_MATCH, ETAG_V1)];
@@ -278,7 +278,7 @@ async fn corrupt_replaced() {
 }
 
 #[tokio::test]
-async fn store_out_origin() {
+async fn store_outage() {
     let provider = provider(StatusCode::OK);
     let cache = HttpCache::new(&provider, BrokenStore);
     let headers = [(CACHE_CONTROL, "max-age=60"), (IF_NONE_MATCH, ETAG_V1)];
@@ -295,7 +295,7 @@ async fn store_out_origin() {
 }
 
 #[tokio::test]
-async fn no_cache_control() {
+async fn absent_cache_control() {
     let provider = provider(StatusCode::OK);
     let cache = HttpCache::new(&provider, &provider);
 
@@ -341,7 +341,7 @@ async fn bad_directives() {
     let provider = provider(StatusCode::OK);
     let cache = HttpCache::new(&provider, &provider);
 
-    for bad_headers in [
+    for headers in [
         vec![(CACHE_CONTROL, "max-age=60")],
         vec![(CACHE_CONTROL, "max-age=60, max-age=0"), (IF_NONE_MATCH, ETAG_V1)],
         vec![(CACHE_CONTROL, "no-store, max-age=0"), (IF_NONE_MATCH, ETAG_V1)],
@@ -350,8 +350,8 @@ async fn bad_directives() {
         vec![(CACHE_CONTROL, "max-age=60"), (IF_NONE_MATCH, "*")],
         vec![(CACHE_CONTROL, "max-age=60"), (IF_NONE_MATCH, "unquoted")],
     ] {
-        let Err(_) = cache.fetch(request(&bad_headers)).await else {
-            panic!("expected malformed directives to be refused: {bad_headers:?}");
+        let Err(_) = cache.fetch(request(&headers)).await else {
+            panic!("expected malformed directives to be refused: {headers:?}");
         };
     }
     assert!(provider.http.requests().is_empty());

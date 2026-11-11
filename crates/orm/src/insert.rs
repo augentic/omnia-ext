@@ -24,16 +24,6 @@ pub struct InsertBuilder<M: Entity, C = NoConflict> {
     _marker: PhantomData<(M, C)>,
 }
 
-impl<M: Entity> Default for InsertBuilder<M, NoConflict> {
-    fn default() -> Self {
-        Self {
-            values: Vec::new(),
-            conflict: None,
-            _marker: PhantomData,
-        }
-    }
-}
-
 impl<M: Entity> InsertBuilder<M, NoConflict> {
     /// Creates a new INSERT query builder.
     #[must_use]
@@ -106,9 +96,9 @@ impl<M: Entity> InsertBuilder<M, ConflictSet> {
     #[must_use]
     pub fn do_update_all(mut self) -> Self {
         let target = self.conflict_mut().target.clone();
-        let update_cols: Vec<&'static str> =
+        let columns: Vec<&'static str> =
             self.values.iter().map(|(col, _)| *col).filter(|col| !target.contains(col)).collect();
-        self.conflict_mut().action = ConflictAction::Update(update_cols);
+        self.conflict_mut().action = ConflictAction::Update(columns);
         self
     }
 
@@ -154,6 +144,16 @@ impl<M: Entity, C> InsertBuilder<M, C> {
         }
 
         finish(&statement, M::TABLE, "insert")
+    }
+}
+
+impl<M: Entity> Default for InsertBuilder<M, NoConflict> {
+    fn default() -> Self {
+        Self {
+            values: Vec::new(),
+            conflict: None,
+            _marker: PhantomData,
+        }
     }
 }
 

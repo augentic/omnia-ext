@@ -17,21 +17,6 @@ pub struct SelectBuilder<M: Entity> {
     _marker: PhantomData<M>,
 }
 
-impl<M: Entity> Default for SelectBuilder<M> {
-    fn default() -> Self {
-        let joins = M::joins().into_iter().map(|join| join.into_join_spec(M::TABLE)).collect();
-
-        Self {
-            filters: Vec::new(),
-            limit: None,
-            offset: None,
-            order: Vec::new(),
-            joins,
-            _marker: PhantomData,
-        }
-    }
-}
-
 impl<M: Entity> SelectBuilder<M> {
     /// Creates a new SELECT query builder.
     #[must_use]
@@ -79,7 +64,7 @@ impl<M: Entity> SelectBuilder<M> {
     /// Adds a JOIN clause to the query.
     #[must_use]
     pub fn join(mut self, join: Join) -> Self {
-        self.joins.push(join.into_join_spec(M::TABLE));
+        self.joins.push(join.into_spec(M::TABLE));
         self
     }
 
@@ -136,6 +121,21 @@ impl<M: Entity> SelectBuilder<M> {
         }
 
         finish(&statement, M::TABLE, "select")
+    }
+}
+
+impl<M: Entity> Default for SelectBuilder<M> {
+    fn default() -> Self {
+        let joins = M::joins().into_iter().map(|join| join.into_spec(M::TABLE)).collect();
+
+        Self {
+            filters: Vec::new(),
+            limit: None,
+            offset: None,
+            order: Vec::new(),
+            joins,
+            _marker: PhantomData,
+        }
     }
 }
 

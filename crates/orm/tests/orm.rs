@@ -107,7 +107,7 @@ fn params(statement: &Statement) -> Vec<String> {
 }
 
 #[tokio::test]
-async fn select_with_filter() {
+async fn filtered_select() {
     let stamp = "2024-01-15T10:30:45+00:00";
     let scripted = ScriptedTables::default().on_query(
         |sql, params| sql.starts_with("SELECT") && params.len() == 2,
@@ -199,7 +199,7 @@ async fn upsert_on_conflict() {
 }
 
 #[tokio::test]
-async fn update_set_with_filter() {
+async fn filtered_update() {
     let provider = Provider::default()
         .tables(ScriptedTables::default().on_exec(|sql, _| sql.starts_with("UPDATE"), 0));
 
@@ -226,7 +226,7 @@ async fn update_set_with_filter() {
 }
 
 #[tokio::test]
-async fn delete_with_filter() {
+async fn filtered_delete() {
     let provider = Provider::default()
         .tables(ScriptedTables::default().on_exec(|sql, _| sql.starts_with("DELETE"), 1));
 
@@ -247,7 +247,7 @@ async fn delete_with_filter() {
 }
 
 #[tokio::test]
-async fn join_alias_cols() {
+async fn aliased_join() {
     let scripted = ScriptedTables::default().on_query(
         |sql, _| sql.contains("LEFT JOIN"),
         vec![row(vec![
@@ -284,7 +284,7 @@ async fn join_alias_cols() {
 }
 
 #[tokio::test]
-async fn map_missing_col() {
+async fn missing_column_or_clause() {
     // A projection bug, not a NULL: the row lacks `url` entirely, so even
     // the `Option<String>` field refuses to map.
     let scripted = ScriptedTables::default().on_query(

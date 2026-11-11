@@ -15,17 +15,6 @@ pub struct UpdateBuilder<M: Entity> {
     _marker: PhantomData<M>,
 }
 
-impl<M: Entity> Default for UpdateBuilder<M> {
-    fn default() -> Self {
-        Self {
-            set_clauses: Vec::new(),
-            filters: Vec::new(),
-            returning: Vec::new(),
-            _marker: PhantomData,
-        }
-    }
-}
-
 impl<M: Entity> UpdateBuilder<M> {
     /// Creates a new UPDATE query builder.
     #[must_use]
@@ -88,5 +77,16 @@ impl<M: Entity> UpdateBuilder<M> {
         }
 
         finish(&statement, M::TABLE, "update")
+    }
+}
+
+impl<M: Entity> Default for UpdateBuilder<M> {
+    fn default() -> Self {
+        Self {
+            set_clauses: Vec::new(),
+            filters: Vec::new(),
+            returning: Vec::new(),
+            _marker: PhantomData,
+        }
     }
 }

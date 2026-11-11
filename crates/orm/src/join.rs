@@ -32,7 +32,7 @@ impl Join {
 
     /// Converts this Join into a ``JoinSpec`` for ``SeaQuery``.
     /// The ``default_table`` is the primary table being selected from.
-    pub(crate) fn into_join_spec(self, default_table: &'static str) -> JoinSpec {
+    pub(crate) fn into_spec(self, default_table: &'static str) -> JoinSpec {
         JoinSpec {
             table: self.table,
             alias: self.alias,
