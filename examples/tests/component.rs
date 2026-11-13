@@ -29,6 +29,7 @@ use hyper::body::Incoming;
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper_util::rt::TokioIo;
+use omnia_http_cache::store_key;
 use omnia_test::host::{Backends, Deployment};
 use omnia_wasi_http::HttpHandler;
 use serde_json::Value;
@@ -45,7 +46,7 @@ mod production;
 /// The body the origin answers every request with.
 const BODY: &[u8] = b"hello from origin";
 
-/// The etag the guest sends, and so the raw key the response is stored under.
+/// The etag the guest sends, whose `store_key` the response is stored under.
 const ETAG_V1: &str = "\"v1\"";
 
 /// One request as the origin saw it.
@@ -155,9 +156,12 @@ async fn cached_miss_then_hit() {
     assert!(hits[0].headers.get(IF_NONE_MATCH).is_none(), "If-None-Match is not forwarded");
 
     // Persisted state: the bucket the guest's `StateStore` opens holds the
-    // serialized response directly under the raw etag, with TTL enforced
+    // serialized response under the etag's `store_key`, with TTL enforced
     // natively by the bucket.
-    let entry = backends.state(ETAG_V1).await.expect("the response is stored under the etag");
+    let entry = backends
+        .state(&store_key(ETAG_V1))
+        .await
+        .expect("the response is stored under the etag's key");
     let cached: Value = serde_json::from_slice(&entry).expect("serialized response");
     assert_eq!(cached["status"], 200);
     assert_eq!(bytes(&cached["body"]), BODY);

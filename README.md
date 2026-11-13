@@ -10,17 +10,19 @@ component and against `omnia_test` doubles natively.
 
 Dependency is strictly one-way. The omnia crates are published crates.io
 dependencies (currently 0.38.0) declared once under
-`[workspace.dependencies]` in `Cargo.toml`; every `omnia-*` crate moves
-together, and there are no `[patch.crates-io]` overrides. Production
-backends live in [omnia-backends](https://github.com/augentic/omnia-backends)
-and are a host-side concern; nothing here talks to them.
+`[workspace.dependencies]` in `Cargo.toml`, and every `omnia-*` crate moves
+together. Until omnia publishes the 0.38.0 capability contract,
+`[patch.crates-io]` points every `omnia-*` at omnia's `capablities` branch,
+and `cargo update -p omnia-sdk` re-locks them as one. Production backends
+live in [omnia-backends](https://github.com/augentic/omnia-backends) and are
+a host-side concern; nothing here talks to them.
 
 ## Crates
 
 | Crate | Description |
 | --- | --- |
-| [`omnia-http-cache`](crates/http-cache) | `HttpCache<H, S>` decorator over `HttpRequest` + `StateStore`. Requests carrying `Cache-Control` and `If-None-Match` are answered from, and written back through, the injected store. |
-| [`omnia-orm`](crates/orm) | `entity!` mapping and typed `SELECT` / `INSERT` / `UPDATE` / `DELETE` builders that render parameterized SQL for `TableStore` to execute over `wasi:sql`. |
+| [`omnia-http-cache`](crates/http-cache) | `HttpCache<H, S>` decorator over `HttpClient` + `StateStore`. Requests carrying `Cache-Control` and `If-None-Match` are answered from, and written back through, the injected store. |
+| [`omnia-orm`](crates/orm) | `entity!` mapping and typed `SELECT` / `INSERT` / `UPDATE` / `DELETE` builders that render parameterized SQL for `SqlDb` to execute over `omnia:sql`. |
 
 ## Quick start
 
@@ -74,19 +76,19 @@ component rung compiles for.
 `omnia_test::guest::Provider` (`MatchedHttp` + `Memory`). Scenarios cover
 miss-then-hit, `no-cache` refresh (with `max-age`) and bypass (without),
 `max-age=0` revalidation, `no-store` bypass, non-2xx and 206 not stored, a corrupt
-entry and a store outage both degrading to the origin, pass-through without
-`Cache-Control` or with only unrecognised directives, and malformed
-directives. Unit tests
-for the `Cache-Control` parser live beside it in `src/control.rs`.
+entry and a store outage both degrading to the origin, an entity-tag that is
+no portable key cached over a store that refuses such keys, pass-through
+without `Cache-Control` or with only unrecognised directives, and malformed
+directives.
 
 `crates/orm/tests/orm.rs` runs each builder's `Query` through the same
 `Provider`, whose `ScriptedTables` records the SQL text and `$n` parameters
-that reach `TableStore` and answers with scripted rows. Scenarios cover a
+that reach `SqlDb` and answers with scripted rows. Scenarios cover a
 filtered, ordered, limited select mapped back through `Entity::from_row`
 (including `NULL` → `None` and RFC 3339 timestamps), insert from an entity,
 an `ON CONFLICT` upsert, a filtered update and delete, a JOIN entity with
-aliased columns, and a missing column failing row mapping. Unit tests for
-SQL rendering and type conversion live beside the builders in `src/`.
+aliased columns, a missing column failing row mapping, and a limit too
+large for a portable integer refusing to build.
 
 ### Component rung
 
@@ -95,7 +97,7 @@ to a `wasm32-wasip2` component by `examples/build.rs` — through the example
 host's own `runtime!` wiring over `omnia_test::host::Backends`. A loopback
 origin records hits; one scenario, `cached_miss_then_hit`, asserts both
 handler responses, a single origin fetch, and the keyvalue envelope under
-the raw etag.
+the etag's `store_key`.
 
 `examples/tests/orm.rs` boots the ORM example guest the same way, over the
 bundle's private in-memory `SQLite`. One scenario, `agency_feed_lifecycle`,

@@ -8,7 +8,6 @@ use sea_query::{
     SubQueryStatement, Value,
 };
 
-use super::DataType;
 use super::entity::to_wasi_params;
 
 /// A built SQL statement: the rendered SQL plus its bound parameters.
@@ -16,11 +15,11 @@ pub struct Query {
     /// The rendered SQL text with numbered placeholders (`$1`, `$2`, ...).
     pub sql: String,
     /// The bound parameter values, in placeholder order.
-    pub params: Vec<DataType>,
+    pub params: Vec<crate::Value>,
 }
 
 /// Finalises a `SeaQuery` statement into a [`Query`]: renders the SQL, converts the bound
-/// values to WASI [`DataType`]s, and emits a uniform `tracing::debug!` event.
+/// values to [`Value`](crate::Value)s, and emits a uniform `tracing::debug!` event.
 pub fn finish<S: QueryStatementBuilder>(
     stmt: &S, table: &'static str, kind: &'static str,
 ) -> Result<Query> {

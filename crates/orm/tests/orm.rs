@@ -1,24 +1,21 @@
 //! Tests for the query builders driven exactly as a guest uses them: each
 //! built `Query` is executed through `omnia_test::guest::Provider`, whose
 //! `ScriptedTables` records the SQL text and `$n` parameters that reach
-//! `TableStore` and answers with scripted rows for `Entity::from_row`.
+//! `SqlDb` and answers with scripted rows for `Entity::from_row`.
 
 // Host-only: the test doubles are `not(wasm32)` dev-dependencies.
 #![cfg(not(target_arch = "wasm32"))]
 // `entity!` only accepts `pub` fields, and the fixtures are not an API.
 #![expect(missing_docs, reason = "test fixtures are not a public API")]
 
-use std::fmt::Debug;
-
 use chrono::{DateTime, Utc};
 use omnia_orm::{
-    DataType, DeleteBuilder, Entity, Field, Filter, InsertBuilder, Join, Row, SelectBuilder,
-    UpdateBuilder, entity,
+    DeleteBuilder, Entity, Field, Filter, InsertBuilder, Join, Row, SelectBuilder, UpdateBuilder,
+    Value, entity,
 };
-use omnia_sdk::TableStore as _;
-use omnia_test::guest::{Provider, ScriptedTables, Statement};
-
-const CONNECTION: &str = "db";
+use omnia_sdk::SqlDb as _;
+use omnia_sdk::capability::{self, ErrorKind};
+use omnia_test::guest::{Executed, Provider, ScriptedTables};
 
 entity!(
     table = "agency",
@@ -55,9 +52,8 @@ entity!(
     }
 );
 
-fn row(fields: Vec<(&str, DataType)>) -> Row {
+fn row(fields: Vec<(&str, Value)>) -> Row {
     Row {
-        index: "0".to_owned(),
         fields: fields
             .into_iter()
             .map(|(name, value)| Field {
@@ -68,42 +64,11 @@ fn row(fields: Vec<(&str, DataType)>) -> Row {
     }
 }
 
-fn str(value: &str) -> DataType {
-    DataType::Str(Some(value.to_owned()))
-}
-
 /// The one statement a scenario issued.
-fn only_statement(provider: &Provider) -> Statement {
-    let statements = provider.tables.statements();
+fn only_statement(provider: &Provider) -> Executed {
+    let statements = provider.sql.statements();
     assert_eq!(statements.len(), 1, "statements: {statements:?}");
     statements.into_iter().next().expect("one statement")
-}
-
-/// The bound parameters as `Kind(value)` / `Kind(NULL)`; the WIT-generated
-/// enum carries no `PartialEq`, so this is the comparable shape.
-fn params(statement: &Statement) -> Vec<String> {
-    fn render<T: Debug>(kind: &str, value: Option<&T>) -> String {
-        value.map_or_else(|| format!("{kind}(NULL)"), |v| format!("{kind}({v:?})"))
-    }
-
-    statement
-        .params
-        .iter()
-        .map(|param| match param {
-            DataType::Int32(v) => render("Int32", v.as_ref()),
-            DataType::Int64(v) => render("Int64", v.as_ref()),
-            DataType::Uint32(v) => render("Uint32", v.as_ref()),
-            DataType::Uint64(v) => render("Uint64", v.as_ref()),
-            DataType::Float(v) => render("Float", v.as_ref()),
-            DataType::Double(v) => render("Double", v.as_ref()),
-            DataType::Str(v) => render("Str", v.as_ref()),
-            DataType::Boolean(v) => render("Boolean", v.as_ref()),
-            DataType::Date(v) => render("Date", v.as_ref()),
-            DataType::Time(v) => render("Time", v.as_ref()),
-            DataType::Timestamp(v) => render("Timestamp", v.as_ref()),
-            DataType::Binary(v) => render("Binary", v.as_ref()),
-        })
-        .collect()
 }
 
 #[tokio::test]
@@ -112,13 +77,13 @@ async fn filtered_select() {
     let scripted = ScriptedTables::default().on_query(
         |sql, params| sql.starts_with("SELECT") && params.len() == 2,
         vec![row(vec![
-            ("agency_id", DataType::Int64(Some(7))),
-            ("name", str("Metro")),
-            ("url", DataType::Str(None)),
-            ("created_at", DataType::Timestamp(Some(stamp.to_owned()))),
+            ("agency_id", Value::from(7_i64)),
+            ("name", Value::from("Metro")),
+            ("url", Value::Str(None)),
+            ("created_at", Value::Timestamp(Some(stamp.to_owned()))),
         ])],
     );
-    let provider = Provider::default().tables(scripted);
+    let provider = Provider::default().sql(scripted);
 
     let query = SelectBuilder::<Agency>::new()
         .r#where(Filter::eq("agency_id", 7_i64))
@@ -126,19 +91,20 @@ async fn filtered_select() {
         .limit(10)
         .build()
         .expect("select builds");
-    let rows = provider.query(CONNECTION, &query.sql, &query.params).await.expect("scripted query");
+    let rows = provider.query(&query.sql, &query.params).await.expect("scripted query");
 
+    // The unsigned limit binds as `Int64`, the portable integer.
     let statement = only_statement(&provider);
-    assert_eq!(statement.connection, CONNECTION);
+    assert_eq!(statement.binding, "default");
     assert_eq!(
         statement.sql,
         r#"SELECT "agency"."agency_id", "agency"."name", "agency"."url", "agency"."created_at" FROM "agency" WHERE ("agency"."agency_id") = ($1) ORDER BY "agency"."created_at" DESC LIMIT $2"#
     );
-    assert_eq!(params(&statement), ["Int64(7)", "Uint64(10)"]);
+    assert_eq!(statement.params, [Value::from(7_i64), Value::from(10_i64)]);
 
     // SQL `NULL` maps to `None`; the RFC 3339 timestamp parses to `DateTime<Utc>`.
     let agencies: Vec<Agency> =
-        rows.iter().map(Agency::from_row).collect::<anyhow::Result<_>>().expect("rows map");
+        rows.iter().map(Agency::from_row).collect::<capability::Result<_>>().expect("rows map");
     assert_eq!(agencies.len(), 1);
     assert_eq!(agencies[0].agency_id, 7);
     assert_eq!(agencies[0].name, "Metro");
@@ -149,7 +115,7 @@ async fn filtered_select() {
 #[tokio::test]
 async fn insert_from_entity() {
     let provider = Provider::default()
-        .tables(ScriptedTables::default().on_exec(|sql, _| sql.starts_with("INSERT"), 1));
+        .sql(ScriptedTables::default().on_exec(|sql, _| sql.starts_with("INSERT"), 1));
     let agency = Agency {
         agency_id: 7,
         name: "Metro".to_owned(),
@@ -158,8 +124,7 @@ async fn insert_from_entity() {
     };
 
     let query = InsertBuilder::<Agency>::from_entity(&agency).build().expect("insert builds");
-    let affected =
-        provider.exec(CONNECTION, &query.sql, &query.params).await.expect("scripted exec");
+    let affected = provider.execute(&query.sql, &query.params).await.expect("scripted execute");
     assert_eq!(affected, 1);
 
     // Every field travels, in declaration order; `None` is a typed NULL and
@@ -170,15 +135,20 @@ async fn insert_from_entity() {
         r#"INSERT INTO "agency" ("agency_id", "name", "url", "created_at") VALUES ($1, $2, $3, $4)"#
     );
     assert_eq!(
-        params(&statement),
-        ["Int64(7)", r#"Str("Metro")"#, "Str(NULL)", r#"Timestamp("2024-01-15T10:30:45+00:00")"#]
+        statement.params,
+        [
+            Value::from(7_i64),
+            Value::from("Metro"),
+            Value::Str(None),
+            Value::Timestamp(Some("2024-01-15T10:30:45+00:00".to_owned())),
+        ]
     );
 }
 
 #[tokio::test]
 async fn upsert_on_conflict() {
     let provider = Provider::default()
-        .tables(ScriptedTables::default().on_exec(|sql, _| sql.starts_with("INSERT"), 1));
+        .sql(ScriptedTables::default().on_exec(|sql, _| sql.starts_with("INSERT"), 1));
 
     let query = InsertBuilder::<Feed>::new()
         .set("feed_id", 1_i64)
@@ -188,20 +158,23 @@ async fn upsert_on_conflict() {
         .do_update_all()
         .build()
         .expect("upsert builds");
-    provider.exec(CONNECTION, &query.sql, &query.params).await.expect("scripted exec");
+    provider.execute(&query.sql, &query.params).await.expect("scripted execute");
 
     let statement = only_statement(&provider);
     assert_eq!(
         statement.sql,
         r#"INSERT INTO "feed" ("feed_id", "agency_id", "description") VALUES ($1, $2, $3) ON CONFLICT ("feed_id") DO UPDATE SET "agency_id" = "excluded"."agency_id", "description" = "excluded"."description""#
     );
-    assert_eq!(params(&statement), ["Int64(1)", "Int64(7)", r#"Str("Bus routes")"#]);
+    assert_eq!(
+        statement.params,
+        [Value::from(1_i64), Value::from(7_i64), Value::from("Bus routes")]
+    );
 }
 
 #[tokio::test]
 async fn filtered_update() {
     let provider = Provider::default()
-        .tables(ScriptedTables::default().on_exec(|sql, _| sql.starts_with("UPDATE"), 0));
+        .sql(ScriptedTables::default().on_exec(|sql, _| sql.starts_with("UPDATE"), 0));
 
     let query = UpdateBuilder::<Agency>::new()
         .set("name", "Metro Transit")
@@ -209,8 +182,7 @@ async fn filtered_update() {
         .r#where(Filter::eq("agency_id", 7_i64))
         .build()
         .expect("update builds");
-    let affected =
-        provider.exec(CONNECTION, &query.sql, &query.params).await.expect("scripted exec");
+    let affected = provider.execute(&query.sql, &query.params).await.expect("scripted execute");
 
     // The affected-row count is the caller's not-found signal.
     assert_eq!(affected, 0);
@@ -220,22 +192,21 @@ async fn filtered_update() {
         r#"UPDATE "agency" SET "name" = $1, "url" = $2 WHERE ("agency"."agency_id") = ($3)"#
     );
     assert_eq!(
-        params(&statement),
-        [r#"Str("Metro Transit")"#, r#"Str("https://metro.test")"#, "Int64(7)"]
+        statement.params,
+        [Value::from("Metro Transit"), Value::from("https://metro.test"), Value::from(7_i64)]
     );
 }
 
 #[tokio::test]
 async fn filtered_delete() {
     let provider = Provider::default()
-        .tables(ScriptedTables::default().on_exec(|sql, _| sql.starts_with("DELETE"), 1));
+        .sql(ScriptedTables::default().on_exec(|sql, _| sql.starts_with("DELETE"), 1));
 
     let query = DeleteBuilder::<Feed>::new()
         .r#where(Filter::and([Filter::eq("feed_id", 1_i64), Filter::eq("agency_id", 7_i64)]))
         .build()
         .expect("delete builds");
-    let affected =
-        provider.exec(CONNECTION, &query.sql, &query.params).await.expect("scripted exec");
+    let affected = provider.execute(&query.sql, &query.params).await.expect("scripted execute");
     assert_eq!(affected, 1);
 
     let statement = only_statement(&provider);
@@ -243,7 +214,7 @@ async fn filtered_delete() {
         statement.sql,
         r#"DELETE FROM "feed" WHERE (("feed"."feed_id") = ($1)) AND (("feed"."agency_id") = ($2))"#
     );
-    assert_eq!(params(&statement), ["Int64(1)", "Int64(7)"]);
+    assert_eq!(statement.params, [Value::from(1_i64), Value::from(7_i64)]);
 }
 
 #[tokio::test]
@@ -251,19 +222,19 @@ async fn aliased_join() {
     let scripted = ScriptedTables::default().on_query(
         |sql, _| sql.contains("LEFT JOIN"),
         vec![row(vec![
-            ("feed_id", DataType::Int64(Some(1))),
-            ("description", str("Bus routes")),
-            ("agency_name", str("Metro")),
+            ("feed_id", Value::from(1_i64)),
+            ("description", Value::from("Bus routes")),
+            ("agency_name", Value::from("Metro")),
         ])],
     );
-    let provider = Provider::default().tables(scripted);
+    let provider = Provider::default().sql(scripted);
 
     let query = SelectBuilder::<FeedWithAgency>::new()
         .order_by_desc(Some("feed"), "created_at")
         .limit(100)
         .build()
         .expect("join select builds");
-    let rows = provider.query(CONNECTION, &query.sql, &query.params).await.expect("scripted query");
+    let rows = provider.query(&query.sql, &query.params).await.expect("scripted query");
 
     // The entity's default join and the aliased projection come from
     // `entity!`; the caller only adds ordering and a limit.
@@ -272,11 +243,14 @@ async fn aliased_join() {
         statement.sql,
         r#"SELECT "feed"."feed_id", "feed"."description", "agency"."name" AS "agency_name" FROM "feed" LEFT JOIN "agency" ON ("feed"."agency_id") = ("agency"."agency_id") ORDER BY "feed"."created_at" DESC LIMIT $1"#
     );
-    assert_eq!(params(&statement), ["Uint64(100)"]);
+    assert_eq!(statement.params, [Value::from(100_i64)]);
 
     // The row maps by the alias, so the joined column lands in its field.
-    let feeds: Vec<FeedWithAgency> =
-        rows.iter().map(FeedWithAgency::from_row).collect::<anyhow::Result<_>>().expect("rows map");
+    let feeds: Vec<FeedWithAgency> = rows
+        .iter()
+        .map(FeedWithAgency::from_row)
+        .collect::<capability::Result<_>>()
+        .expect("rows map");
     assert_eq!(feeds.len(), 1);
     assert_eq!(feeds[0].feed_id, 1);
     assert_eq!(feeds[0].description, "Bus routes");
@@ -290,22 +264,34 @@ async fn missing_column_or_clause() {
     let scripted = ScriptedTables::default().on_query(
         |_, _| true,
         vec![row(vec![
-            ("agency_id", DataType::Int64(Some(7))),
-            ("name", str("Metro")),
-            ("created_at", DataType::Timestamp(Some("2024-01-15 10:30:45".to_owned()))),
+            ("agency_id", Value::from(7_i64)),
+            ("name", Value::from("Metro")),
+            ("created_at", Value::Timestamp(Some("2024-01-15 10:30:45".to_owned()))),
         ])],
     );
-    let provider = Provider::default().tables(scripted);
+    let provider = Provider::default().sql(scripted);
 
     let query = SelectBuilder::<Agency>::new().build().expect("select builds");
-    let rows = provider.query(CONNECTION, &query.sql, &query.params).await.expect("scripted query");
+    let rows = provider.query(&query.sql, &query.params).await.expect("scripted query");
 
     let err = Agency::from_row(&rows[0]).expect_err("missing column");
-    assert!(err.to_string().contains("missing column 'url'"), "{err}");
+    assert_eq!(err.kind(), ErrorKind::Invalid);
+    assert!(err.to_string().contains("row lacks column `url`"), "{err}");
 
     assert!(
         UpdateBuilder::<Agency>::new().r#where(Filter::eq("agency_id", 7_i64)).build().is_err()
     );
     assert!(UpdateBuilder::<Agency>::new().set("name", "x").build().is_err());
     assert!(DeleteBuilder::<Feed>::new().build().is_err());
+}
+
+#[test]
+fn oversized_limit() {
+    // No portable SQL integer holds a `u64` past `i64::MAX`, so the limit
+    // refuses to build rather than wrap.
+    let Err(err) = SelectBuilder::<Agency>::new().limit(u64::MAX).build() else {
+        panic!("expected an oversized limit to be refused");
+    };
+    let err = err.downcast_ref::<capability::Error>().expect("capability error");
+    assert_eq!(err.kind(), ErrorKind::Invalid);
 }

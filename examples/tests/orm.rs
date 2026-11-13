@@ -5,10 +5,10 @@
 //! `gen.rs` names it (`ORM_WASM`). `orm/runtime.rs` is included as
 //! `production`, so the `Hooks` its `runtime!` generates — the exact host
 //! rows the example binary links — assemble the runtime over
-//! `omnia_test::host::Backends`, whose `wasi:sql` is a private in-memory
-//! `SQLite` that lives for the whole boot. A host the guest imports but the
-//! example does not declare fails here at link time, which the handler rung
-//! in `crates/orm/tests` cannot see.
+//! `omnia_test::host::Backends`, whose `omnia:sql` and `wasi:sql` share one
+//! private in-memory `SQLite` that lives for the whole boot. A host the
+//! guest imports but the example does not declare fails here at link time,
+//! which the handler rung in `crates/orm/tests` cannot see.
 //!
 //! One scenario chains the routes in-process through [`HttpHandler`],
 //! bypassing the socket: rows written by one request are read back by the

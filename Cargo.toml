@@ -45,13 +45,13 @@ axum = { version = "0.8.9", default-features = false, features = ["json"] }
 bytes = "1.12.1"
 chrono = "0.4.45"
 http = "1.5.0"
-http-body = "1.1.0"
 http-body-util = "0.1.5"
 hyper = "1.12.0"
 hyper-util = "0.1.21"
 sea-query = { version = "1.0.2", default-features = false, features = ["thread-safe", "with-chrono"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
+sha2 = { version = "0.11.1", default-features = false }
 tokio = { version = "1.54.1", default-features = false }
 tracing = "0.1.44"
 wasip3 = { version = "0.10.0", features = ["http-compat"] }
@@ -69,18 +69,18 @@ omnia-http-cache = { path = "crates/http-cache", version = "0.36.0" }
 omnia-orm = { path = "crates/orm", version = "0.36.0" }
 
 [patch.crates-io]
-omnia = { git = "https://github.com/augentic/omnia" }
-omnia-sdk = { git = "https://github.com/augentic/omnia" }
-omnia-test = { git = "https://github.com/augentic/omnia" }
-omnia-wasi-config = { git = "https://github.com/augentic/omnia" }
-omnia-wasi-http = { git = "https://github.com/augentic/omnia" }
-omnia-wasi-keyvalue = { git = "https://github.com/augentic/omnia" }
-omnia-wasi-otel = { git = "https://github.com/augentic/omnia" }
-omnia-wasi-sql = { git = "https://github.com/augentic/omnia" }
+omnia = { git = "https://github.com/augentic/omnia", branch = "capablities" }
+omnia-sdk = { git = "https://github.com/augentic/omnia", branch = "capablities" }
+omnia-test = { git = "https://github.com/augentic/omnia", branch = "capablities" }
+omnia-wasi-config = { git = "https://github.com/augentic/omnia", branch = "capablities" }
+omnia-wasi-http = { git = "https://github.com/augentic/omnia", branch = "capablities" }
+omnia-wasi-keyvalue = { git = "https://github.com/augentic/omnia", branch = "capablities" }
+omnia-wasi-otel = { git = "https://github.com/augentic/omnia", branch = "capablities" }
+omnia-wasi-sql = { git = "https://github.com/augentic/omnia", branch = "capablities" }
 
 # omnia = { path = "../omnia/crates/omnia" }
-# omnia-sdk = { path = "../omnia/crates/sdk" }
-# omnia-test = { path = "../omnia/crates/test" }
+# omnia-sdk = { path = "../omnia/crates/omnia-sdk" }
+# omnia-test = { path = "../omnia/crates/omnia-test" }
 # omnia-wasi-config = { path = "../omnia/crates/wasi-config" }
 # omnia-wasi-http = { path = "../omnia/crates/wasi-http" }
 # omnia-wasi-keyvalue = { path = "../omnia/crates/wasi-keyvalue" }

@@ -3,7 +3,7 @@
 //! Demonstrates `omnia-orm` over the WASI SQL interface: raw prepared
 //! statements for the schema, then `SelectBuilder`, `InsertBuilder`,
 //! `UpdateBuilder`, `DeleteBuilder`, and an `entity!` JOIN mapping, all
-//! executed through the SDK's `TableStore` capability with parameterized
+//! executed through the SDK's `SqlDb` capability with parameterized
 //! queries (`$1`, `$2`, ...).
 
 #![cfg(target_arch = "wasm32")]
@@ -17,13 +17,11 @@ use omnia_orm::{
     DeleteBuilder, Entity, Filter, InsertBuilder, Join, SelectBuilder, UpdateBuilder, entity,
 };
 use omnia_sdk::api::{Client, Context, Handlers, Router};
-use omnia_sdk::{TableStore, WasiProvider};
+use omnia_sdk::{SqlDb as _, WasiProvider, capability, sql};
 use omnia_wasi_sql::readwrite;
 use omnia_wasi_sql::types::{Connection, Statement};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-
-const CONNECTION: &str = "db";
 
 omnia_sdk::api::http::export!(router);
 
@@ -47,16 +45,12 @@ async fn list_agencies(context: Context<WasiProvider>) -> omnia_sdk::Result<Json
         .build()
         .context("building query")?;
 
-    let rows = context
-        .tables()
-        .query(CONNECTION, &select.sql, &select.params)
-        .await
-        .context("executing query")?;
+    let rows = context.sql().query(&select.sql, &select.params).await.context("executing query")?;
 
     let agencies = rows
         .iter()
         .map(Agency::from_row)
-        .collect::<anyhow::Result<Vec<_>>>()
+        .collect::<capability::Result<Vec<_>>>()
         .context("mapping rows")?;
 
     Ok(Json(json!({ "agencies": agencies })))
@@ -79,11 +73,7 @@ async fn create_agency(
 
     let query = InsertBuilder::<Agency>::from_entity(&agency).build().context("building insert")?;
 
-    context
-        .tables()
-        .exec(CONNECTION, &query.sql, &query.params)
-        .await
-        .context("inserting agency")?;
+    context.sql().execute(&query.sql, &query.params).await.context("inserting agency")?;
 
     Ok(Json(json!({ "agency": agency })))
 }
@@ -102,11 +92,8 @@ async fn update_agency(
         .build()
         .context("building update")?;
 
-    let rows_affected = context
-        .tables()
-        .exec(CONNECTION, &query.sql, &query.params)
-        .await
-        .context("updating agency")?;
+    let rows_affected =
+        context.sql().execute(&query.sql, &query.params).await.context("updating agency")?;
 
     if rows_affected == 0 {
         return Err(anyhow!("agency not found").into());
@@ -129,8 +116,8 @@ async fn create_feed(
         .context("building agency lookup")?;
 
     let rows = context
-        .tables()
-        .query(CONNECTION, &select.sql, &select.params)
+        .sql()
+        .query(&select.sql, &select.params)
         .await
         .context("executing agency lookup")?;
 
@@ -147,7 +134,7 @@ async fn create_feed(
 
     let query = InsertBuilder::<Feed>::from_entity(&feed).build().context("building insert")?;
 
-    context.tables().exec(CONNECTION, &query.sql, &query.params).await.context("inserting feed")?;
+    context.sql().execute(&query.sql, &query.params).await.context("inserting feed")?;
 
     Ok(Json(json!({ "feed": feed })))
 }
@@ -163,16 +150,13 @@ async fn list_all_feeds(context: Context<WasiProvider>) -> omnia_sdk::Result<Jso
         .build()
         .context("building join query")?;
 
-    let rows = context
-        .tables()
-        .query(CONNECTION, &select.sql, &select.params)
-        .await
-        .context("executing join query")?;
+    let rows =
+        context.sql().query(&select.sql, &select.params).await.context("executing join query")?;
 
     let feeds = rows
         .iter()
         .map(FeedWithAgency::from_row)
-        .collect::<anyhow::Result<Vec<_>>>()
+        .collect::<capability::Result<Vec<_>>>()
         .context("mapping rows")?;
 
     Ok(Json(json!({ "feeds": feeds })))
@@ -190,11 +174,8 @@ async fn delete_feed(
         .build()
         .context("building delete")?;
 
-    let rows_affected = context
-        .tables()
-        .exec(CONNECTION, &query.sql, &query.params)
-        .await
-        .context("deleting feed")?;
+    let rows_affected =
+        context.sql().execute(&query.sql, &query.params).await.context("deleting feed")?;
 
     if rows_affected == 0 {
         return Err(anyhow!("feed not found").into());
@@ -206,7 +187,7 @@ async fn delete_feed(
 /// Create the schema with raw prepared statements. Each request is handled by
 /// a fresh guest instance, so this runs per request — fine for an example.
 async fn ensure_schema() -> anyhow::Result<()> {
-    let pool = Connection::open(CONNECTION.to_string())
+    let pool = Connection::open(sql::DEFAULT.to_owned())
         .await
         .map_err(|e| anyhow!("opening connection: {}", e.trace()))?;
 

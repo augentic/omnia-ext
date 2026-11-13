@@ -1,12 +1,12 @@
 # omnia-orm
 
 A lightweight, backend-agnostic object-relational mapper for Omnia guests
-using `wasi:sql`. The `entity!` macro maps a struct to a table and typed
+using `omnia:sql`. The `entity!` macro maps a struct to a table and typed
 builders produce parameterized `SELECT` / `INSERT` / `UPDATE` / `DELETE`
 statements as `{ sql, params }` pairs; executing them is left to whatever
-implements `omnia_sdk::TableStore`. SQL generation is delegated to
+implements `omnia_sdk::SqlDb`. SQL generation is delegated to
 [`sea-query`](https://crates.io/crates/sea-query) and the crate re-exports
-`Row`, `Field` and `DataType` from `omnia_sdk::sql` so row mapping needs no
+`Row`, `Field` and `Value` from `omnia_sdk::sql` so row mapping needs no
 extra dependency.
 
 ## Defining entities
@@ -35,26 +35,29 @@ must implement `FetchValue` (for `from_row`) and `Clone + Into<sea_query::Value>
 (for `InsertBuilder::from_entity`, which clones each field out of `&self`
 before converting it). All of the types below satisfy this:
 
-| Rust type | `DataType` read | `DataType` written |
+| Rust type | `Value` read | `Value` written |
 | --- | --- | --- |
-| `bool` | `Boolean` | `Boolean` |
-| `i32`, `i64` | `Int32`, `Int64` | `Int32`, `Int64` |
-| `u32`, `u64` | `Uint32`, `Uint64` | `Uint32`, `Uint64` |
-| `f32`, `f64` | `Float`, `Double` | `Float`, `Double` |
-| `String` | `Str` | `Str` |
+| `bool` | `Boolean`, or an integer `0` or `1` | `Boolean` |
+| `i32`, `i64` | any integer case the value fits | `Int32`, `Int64` |
+| `u32`, `u64` | any integer case the value fits | `Int64` |
+| `f32`, `f64` | `Float`; `Float` or `Double` | `Float`, `Double` |
+| `String` | `Str`, `Date`, `Time` or `Timestamp` | `Str` |
 | `Vec<u8>` | `Binary` | `Binary` |
-| `chrono::NaiveDate` | `Date` (`%Y-%m-%d`) | `Date` |
-| `chrono::DateTime<Utc>` | `Timestamp` (RFC 3339 or `%Y-%m-%d %H:%M:%S%.f`) | `Timestamp` (RFC 3339) |
+| `chrono::NaiveDate` | any text case (`%Y-%m-%d`) | `Date` |
+| `chrono::DateTime<Utc>` | any text case (RFC 3339 or `%Y-%m-%d %H:%M:%S%.f`) | `Timestamp` (RFC 3339) |
 | `serde_json::Value` | `Str` or `Binary` holding JSON | — |
 | `Option<T>` | SQL `NULL` → `None`, otherwise as `T` | as `T`, `None` → `NULL` |
 
-A missing column is a projection bug and fails `from_row` even for an
-`Option<T>` field; only SQL `NULL` maps to `None`.
+`omnia:sql` marks its unsigned types non-portable, so unsigned values bind
+as `Int64`, and a `u64` past `i64::MAX` fails to build. `from_row` fails
+with `ErrorKind::Invalid` on a missing column, a mismatched value, or text
+that does not parse. A missing column is a projection bug and fails even
+for an `Option<T>` field; only SQL `NULL` maps to `None`.
 
 ## Queries with the builders
 
 Each builder ends in `build()`, returning a `Query { sql, params }` with
-`$1`, `$2`, … placeholders and the matching `Vec<DataType>`.
+`$1`, `$2`, … placeholders and the matching `Vec<Value>`.
 
 Select with filtering, ordering, and limits:
 
@@ -161,25 +164,25 @@ entity's defaults.
 
 ## Usage
 
-Builders know nothing about connections. Hand `query.sql` and
-`query.params` to an `omnia_sdk::TableStore` (feature `sql`); on `wasm32`,
-`omnia_sdk::WasiProvider` implements `TableStore` over WASI imports. `query`
-returns rows to map with `Entity::from_row`, `exec` returns the affected-row
-count:
+Builders know nothing about databases. Hand `query.sql` and `query.params`
+to an `omnia_sdk::SqlDb`; on `wasm32`, `omnia_sdk::WasiProvider` implements
+`SqlDb` over the `omnia:sql` imports. `query` returns rows to map with
+`Entity::from_row`, `execute` returns the affected-row count:
 
 ```rust,ignore
-use anyhow::Result;
 use omnia_orm::{Entity, Filter, SelectBuilder};
-use omnia_sdk::{TableStore, WasiProvider};
+use omnia_sdk::capability::Result;
+use omnia_sdk::{SqlDb, WasiProvider};
 
 let query = SelectBuilder::<Agency>::new()
     .r#where(Filter::eq("agency_id", id))
     .build()?;
-let rows = WasiProvider.query("db".to_string(), query.sql, query.params).await?;
+let rows = WasiProvider.query(&query.sql, &query.params).await?;
 let agencies = rows.iter().map(Agency::from_row).collect::<Result<Vec<_>>>()?;
 ```
 
-The pool name (`"db"` here) is what the host backend resolves. Natively,
-`omnia_test::guest::Provider` plays the same role: its `ScriptedTables`
-double records the SQL and `$n` params that reach `TableStore` and returns
-the rows you script.
+A provider's own handle runs on the `default` database binding, and
+`SqlDb::named` returns a handle on another binding the deployment declares.
+Natively, `omnia_test::guest::Provider` plays the same role: its
+`ScriptedTables` double records the SQL, `$n` params and binding that reach
+`SqlDb` and returns the rows you script.

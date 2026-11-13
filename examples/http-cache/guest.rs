@@ -13,10 +13,9 @@ use axum::routing::get;
 use bytes::Bytes;
 use http::Method;
 use http::header::{CACHE_CONTROL, IF_NONE_MATCH};
-use http_body_util::Empty;
 use omnia_http_cache::HttpCache;
 use omnia_sdk::api::{Client, Context, Handlers, Router};
-use omnia_sdk::{Config, HttpRequest, WasiProvider};
+use omnia_sdk::{ConfigExt as _, HttpClient as _, WasiProvider};
 
 omnia_sdk::api::http::export!(router);
 
@@ -28,7 +27,7 @@ fn router(provider: WasiProvider) -> Router<WasiProvider> {
 /// from the store. Either way the response carries `ETag: "v1"`.
 #[omnia_wasi_otel::instrument]
 async fn cached(context: Context<WasiProvider>) -> omnia_sdk::Result<impl IntoResponse> {
-    let upstream = context.config().get("UPSTREAM_URL").await?;
+    let upstream: String = context.config().require("UPSTREAM_URL").await?;
     tracing::info!("fetching {upstream}/resource through the cache");
 
     let request = http::Request::builder()
@@ -36,7 +35,7 @@ async fn cached(context: Context<WasiProvider>) -> omnia_sdk::Result<impl IntoRe
         .uri(format!("{upstream}/resource"))
         .header(CACHE_CONTROL, "max-age=300")
         .header(IF_NONE_MATCH, "\"v1\"")
-        .body(Empty::<Bytes>::new())
+        .body(Bytes::new())
         .context("building request")?;
 
     let provider = *context.provider();

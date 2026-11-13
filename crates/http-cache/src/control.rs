@@ -1,8 +1,9 @@
 //! `Cache-Control` and `If-None-Match` request header parsing.
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Result, bail};
 use http::HeaderMap;
 use http::header::{CACHE_CONTROL, IF_NONE_MATCH};
+use omnia_sdk::capability::{self, Error, ErrorKind};
 
 /// Caching directives parsed from a request's `Cache-Control` and
 /// `If-None-Match` headers.
@@ -24,7 +25,7 @@ pub struct Control {
     // store and there is no lifetime to write a fresh copy under.
     max_age: u64,
 
-    // ETag to use as the cache key, derived from the `If-None-Match` header.
+    // The strong entity-tag from `If-None-Match`, which names the stored entry.
     etag: String,
 }
 
@@ -38,13 +39,16 @@ impl Control {
     ///
     /// # Errors
     ///
-    /// Returns an error if the directives are malformed or conflict.
-    pub fn maybe_from(headers: &HeaderMap) -> Result<Option<Self>> {
+    /// Fails with [`ErrorKind::Invalid`] when the directives are malformed or
+    /// conflict.
+    pub fn maybe_from(headers: &HeaderMap) -> capability::Result<Option<Self>> {
         if headers.get(CACHE_CONTROL).is_none() {
             tracing::debug!("no Cache-Control header present");
             return Ok(None);
         }
-        Self::parse(headers).context("issue parsing Cache-Control headers")
+        Self::parse(headers).map_err(|e| {
+            Error::new(ErrorKind::Invalid, format!("issue parsing Cache-Control headers: {e:#}"))
+        })
     }
 
     /// Whether a stored response may be served without contacting the origin.
@@ -65,7 +69,10 @@ impl Control {
         !self.no_store && self.max_age > 0 && !self.etag.is_empty()
     }
 
-    /// The raw `If-None-Match` value, doubling as the storage key.
+    /// The strong entity-tag from `If-None-Match`, empty under `no-store`.
+    ///
+    /// The cache stores its entry at [`store_key`](crate::store_key) of the
+    /// tag.
     #[must_use]
     pub fn etag(&self) -> &str {
         &self.etag
@@ -145,10 +152,13 @@ impl Control {
             if lines.next().is_some() {
                 bail!("multiple `etag` values in `If-None-Match` header are not supported");
             }
-            // The etag doubles as the `&str` store key, so `obs-text` octets
-            // (RFC 9110 §5.5), though grammatically valid, are not accepted.
+            // `Control::etag` hands the tag out as a `&str`, so `obs-text`
+            // octets (RFC 9110 §5.5), though grammatically valid, are not
+            // accepted.
             let Ok(etag) = etag.to_str() else {
-                bail!("`If-None-Match` contains `obs-text` octets, which cannot form a cache key");
+                bail!(
+                    "`If-None-Match` contains `obs-text` octets, which this cache does not accept"
+                );
             };
             control.etag = strong_etag(etag)?.to_string();
         }

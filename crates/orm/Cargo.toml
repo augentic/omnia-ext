@@ -1,6 +1,6 @@
 [package]
 name = "omnia-orm"
-description = "Entity mapping and typed query builders over wasi:sql for Omnia guests"
+description = "Entity mapping and typed query builders over omnia:sql for Omnia guests"
 readme = "README.md"
 authors.workspace = true
 categories.workspace = true
@@ -18,7 +18,7 @@ workspace = true
 [dependencies]
 anyhow.workspace = true
 chrono.workspace = true
-omnia-sdk = { workspace = true, features = ["sql"] }
+omnia-sdk.workspace = true
 sea-query.workspace = true
 serde_json.workspace = true
 tracing.workspace = true

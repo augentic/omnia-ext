@@ -9,22 +9,21 @@ mod query;
 mod select;
 mod update;
 
-// The `entity!` expansion names `$crate::anyhow::Result`, so the crate must
-// re-export it for callers that do not depend on `anyhow` themselves.
-#[doc(hidden)]
-pub use anyhow;
 pub use delete::DeleteBuilder;
 pub use entity::{Entity, EntityValues, FetchValue};
 pub use filter::{CmpOp, ColRef, Filter};
 pub use insert::{ConflictSet, InsertBuilder, NoConflict};
 pub use join::{Join, JoinKind};
-pub use omnia_sdk::sql::{DataType, Field, Row};
+pub use omnia_sdk::sql::{Field, Row, Value};
 pub use query::Query;
 pub use select::SelectBuilder;
 pub use update::UpdateBuilder;
 
+// The `entity!` expansion names these, so they resolve for callers that do
+// not depend on `omnia-sdk` or `sea-query` themselves.
 #[doc(hidden)]
 pub mod __private {
+    pub use omnia_sdk::capability::Result;
     pub use sea_query::Value;
 }
 
@@ -86,7 +85,7 @@ macro_rules! entity {
                 vec![$( ($col_field, $col_table, $col_name) ),*]
             }
 
-            fn from_row(row: &$crate::Row) -> $crate::anyhow::Result<Self> {
+            fn from_row(row: &$crate::Row) -> $crate::__private::Result<Self> {
                 Ok(Self {
                     $(
                         $field_name: <$field_type as $crate::FetchValue>::fetch(row, stringify!($field_name))?,
