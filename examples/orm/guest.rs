@@ -192,7 +192,7 @@ async fn ensure_schema() -> anyhow::Result<()> {
         .map_err(|e| anyhow!("opening connection: {}", e.trace()))?;
 
     let create_agency = "CREATE TABLE IF NOT EXISTS agency (
-        agency_id INTEGER PRIMARY KEY,
+        agency_id BIGINT PRIMARY KEY,
         name TEXT NOT NULL,
         url TEXT,
         timezone TEXT,
@@ -208,8 +208,8 @@ async fn ensure_schema() -> anyhow::Result<()> {
         .map_err(|e| anyhow!("creating agency table: {}", e.trace()))?;
 
     let create_feed = "CREATE TABLE IF NOT EXISTS feed (
-        feed_id INTEGER PRIMARY KEY,
-        agency_id INTEGER NOT NULL,
+        feed_id BIGINT PRIMARY KEY,
+        agency_id BIGINT NOT NULL,
         description TEXT NOT NULL,
         created_at TEXT NOT NULL
     )";

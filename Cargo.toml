@@ -79,8 +79,8 @@ omnia-wasi-otel = { git = "https://github.com/augentic/omnia", branch = "capabli
 omnia-wasi-sql = { git = "https://github.com/augentic/omnia", branch = "capablities" }
 
 # omnia = { path = "../omnia/crates/omnia" }
-# omnia-sdk = { path = "../omnia/crates/omnia-sdk" }
-# omnia-test = { path = "../omnia/crates/omnia-test" }
+# omnia-sdk = { path = "../omnia/crates/sdk" }
+# omnia-test = { path = "../omnia/crates/test" }
 # omnia-wasi-config = { path = "../omnia/crates/wasi-config" }
 # omnia-wasi-http = { path = "../omnia/crates/wasi-http" }
 # omnia-wasi-keyvalue = { path = "../omnia/crates/wasi-keyvalue" }
