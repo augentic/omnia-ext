@@ -128,7 +128,7 @@ version = "4.0.3"
 criteria = "safe-to-deploy"
 
 [[exemptions.cc]]
-version = "1.11.1"
+version = "1.11.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.cfg-if]]
@@ -307,6 +307,10 @@ criteria = "safe-to-deploy"
 version = "1.0.3"
 criteria = "safe-to-deploy"
 
+[[exemptions.errno]]
+version = "0.3.15"
+criteria = "safe-to-deploy"
+
 [[exemptions.etcetera]]
 version = "0.11.0"
 criteria = "safe-to-deploy"
@@ -317,10 +321,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.find-msvc-tools]]
 version = "0.1.15"
-criteria = "safe-to-deploy"
-
-[[exemptions.fixedbitset]]
-version = "0.5.9"
 criteria = "safe-to-deploy"
 
 [[exemptions.flagset]]
@@ -600,7 +600,7 @@ version = "0.9.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.mio]]
-version = "1.2.4"
+version = "1.2.5"
 criteria = "safe-to-deploy"
 
 [[exemptions.moka]]
@@ -671,10 +671,6 @@ criteria = "safe-to-deploy"
 version = "0.10.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.petgraph]]
-version = "0.8.3"
-criteria = "safe-to-deploy"
-
 [[exemptions.pin-project]]
 version = "1.1.13"
 criteria = "safe-to-deploy"
@@ -712,15 +708,15 @@ version = "1.12.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.prost]]
-version = "0.14.5"
+version = "0.14.6"
 criteria = "safe-to-deploy"
 
 [[exemptions.prost-derive]]
-version = "0.14.5"
+version = "0.14.6"
 criteria = "safe-to-deploy"
 
 [[exemptions.prost-types]]
-version = "0.14.5"
+version = "0.14.6"
 criteria = "safe-to-deploy"
 
 [[exemptions.quinn]]
@@ -836,7 +832,7 @@ version = "0.2.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.rustls-webpki]]
-version = "0.103.15"
+version = "0.103.17"
 criteria = "safe-to-deploy"
 
 [[exemptions.rustversion]]
@@ -988,7 +984,7 @@ version = "0.2.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.target-lexicon]]
-version = "0.13.5"
+version = "0.13.6"
 criteria = "safe-to-deploy"
 
 [[exemptions.tempfile]]
@@ -1172,11 +1168,11 @@ version = "0.2.130"
 criteria = "safe-to-deploy"
 
 [[exemptions.wasm-pkg-client]]
-version = "0.16.1"
+version = "0.16.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.wasm-pkg-common]]
-version = "0.16.1"
+version = "0.16.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.wasm-streams]]
