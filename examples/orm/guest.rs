@@ -16,8 +16,8 @@ use chrono::Utc;
 use omnia_orm::{
     DeleteBuilder, Entity, Filter, InsertBuilder, Join, SelectBuilder, UpdateBuilder, entity,
 };
-use omnia_sdk::api::{Client, Context, Handlers, Router};
-use omnia_sdk::{SqlDb as _, WasiProvider, capability, sql};
+use omnia_sdk::api::{Context, Handlers, Router};
+use omnia_sdk::{SqlDb as _, WasiProvider, sql};
 use omnia_wasi_sql::readwrite;
 use omnia_wasi_sql::types::{Connection, Statement};
 use serde::{Deserialize, Serialize};
@@ -32,7 +32,7 @@ fn router(provider: WasiProvider) -> Router<WasiProvider> {
         .route("/agencies/{id}/feeds", post(create_feed))
         .route("/feeds", get(list_all_feeds))
         .route("/feeds/{id}", delete(delete_feed))
-        .with_state(Client::new(provider))
+        .with_state(provider)
 }
 
 /// List all agencies (`SelectBuilder`).
@@ -50,7 +50,7 @@ async fn list_agencies(context: Context<WasiProvider>) -> omnia_sdk::Result<Json
     let agencies = rows
         .iter()
         .map(Agency::from_row)
-        .collect::<capability::Result<Vec<_>>>()
+        .collect::<omnia_sdk::Result<Vec<_>>>()
         .context("mapping rows")?;
 
     Ok(Json(json!({ "agencies": agencies })))
@@ -156,7 +156,7 @@ async fn list_all_feeds(context: Context<WasiProvider>) -> omnia_sdk::Result<Jso
     let feeds = rows
         .iter()
         .map(FeedWithAgency::from_row)
-        .collect::<capability::Result<Vec<_>>>()
+        .collect::<omnia_sdk::Result<Vec<_>>>()
         .context("mapping rows")?;
 
     Ok(Json(json!({ "feeds": feeds })))

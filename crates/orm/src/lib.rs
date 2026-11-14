@@ -23,7 +23,7 @@ pub use update::UpdateBuilder;
 // not depend on `omnia-sdk` or `sea-query` themselves.
 #[doc(hidden)]
 pub mod __private {
-    pub use omnia_sdk::capability::Result;
+    pub use omnia_sdk::Result;
     pub use sea_query::Value;
 }
 

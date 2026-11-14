@@ -8,8 +8,7 @@ use std::time::Duration;
 use bytes::Bytes;
 use http::header::{ETAG, IF_NONE_MATCH};
 use http::{HeaderValue, Request, Response, StatusCode};
-use omnia_sdk::capability::{Error, ErrorKind, Result};
-use omnia_sdk::{HttpClient, StateStore};
+use omnia_sdk::{Error, HttpClient, Result, StateStore};
 use sha2::{Digest, Sha256};
 
 pub use crate::control::Control;
@@ -126,8 +125,7 @@ impl<H: HttpClient, S: StateStore> HttpClient for HttpCache<H, S> {
         // then stands.
         if !etag.is_empty() {
             let value = HeaderValue::from_str(etag).map_err(|e| {
-                Error::new(ErrorKind::Invalid, format!("etag `{etag}` is not a header value"))
-                    .with_source(e)
+                Error::server_error("invalid", format!("etag `{etag}` is not a header value: {e}"))
             })?;
             response.headers_mut().insert(ETAG, value);
         }

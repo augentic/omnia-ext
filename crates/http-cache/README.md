@@ -52,7 +52,7 @@ where cached fetches are wanted and use the bare provider everywhere else.
 - The store never fails a request. A read error or an entry that no longer
   deserializes is treated as a miss; a write error hands back the origin
   response uncached. Both are logged at `warn`. Malformed `Cache-Control` is
-  the caller's error and fails with `ErrorKind::Invalid` before any request
+  the caller's error and fails with the code `invalid` before any request
   leaves.
 
 ## Usage

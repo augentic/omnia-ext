@@ -12,9 +12,8 @@ use bytes::Bytes;
 use http::header::{CACHE_CONTROL, CONTENT_TYPE, ETAG, IF_NONE_MATCH};
 use http::{HeaderValue, Method, Request, Response, StatusCode};
 use omnia_http_cache::{HttpCache, store_key};
-use omnia_sdk::capability::{Error, ErrorKind, Result};
 use omnia_sdk::keyvalue::Conflict;
-use omnia_sdk::{HttpClient as _, StateStore};
+use omnia_sdk::{Error, HttpClient as _, Result, StateStore};
 use omnia_test::guest::{MatchedHttp, Memory, Provider};
 
 const URL: &str = "https://origin.test/resource";
@@ -62,7 +61,7 @@ struct BrokenStore;
 
 impl BrokenStore {
     fn outage<T: Send>() -> impl Future<Output = Result<T>> + Send {
-        ready(Err(Error::new(ErrorKind::Unavailable, "store unavailable")))
+        ready(Err(Error::bad_gateway("unavailable", "store unavailable")))
     }
 }
 
@@ -112,7 +111,7 @@ impl PortableStore {
             && !key.ends_with('.')
             && key.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'));
         if !portable {
-            return Err(Error::new(ErrorKind::Invalid, format!("`{key}` is not a portable key")));
+            return Err(Error::server_error("invalid", format!("`{key}` is not a portable key")));
         }
         Ok(())
     }
@@ -239,7 +238,7 @@ async fn multiline_cache_control() {
     let Err(err) = cache.fetch(request(&headers)).await else {
         panic!("expected conflicting directives error");
     };
-    assert_eq!(err.kind(), ErrorKind::Invalid);
+    assert_eq!(err.code(), "invalid");
     assert_eq!(provider.http.requests().len(), 1);
 }
 
@@ -447,7 +446,7 @@ async fn bad_directives() {
         let Err(err) = cache.fetch(request(&headers)).await else {
             panic!("expected malformed directives to be refused: {headers:?}");
         };
-        assert_eq!(err.kind(), ErrorKind::Invalid, "{headers:?}");
+        assert_eq!(err.code(), "invalid", "{headers:?}");
     }
     assert!(provider.http.requests().is_empty());
     assert!(stored(&provider).is_none());

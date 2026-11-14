@@ -14,7 +14,6 @@ use omnia_orm::{
     Value, entity,
 };
 use omnia_sdk::SqlDb as _;
-use omnia_sdk::capability::{self, ErrorKind};
 use omnia_test::guest::{Executed, Provider, ScriptedTables};
 
 entity!(
@@ -104,7 +103,7 @@ async fn filtered_select() {
 
     // SQL `NULL` maps to `None`; the RFC 3339 timestamp parses to `DateTime<Utc>`.
     let agencies: Vec<Agency> =
-        rows.iter().map(Agency::from_row).collect::<capability::Result<_>>().expect("rows map");
+        rows.iter().map(Agency::from_row).collect::<omnia_sdk::Result<_>>().expect("rows map");
     assert_eq!(agencies.len(), 1);
     assert_eq!(agencies[0].agency_id, 7);
     assert_eq!(agencies[0].name, "Metro");
@@ -249,7 +248,7 @@ async fn aliased_join() {
     let feeds: Vec<FeedWithAgency> = rows
         .iter()
         .map(FeedWithAgency::from_row)
-        .collect::<capability::Result<_>>()
+        .collect::<omnia_sdk::Result<_>>()
         .expect("rows map");
     assert_eq!(feeds.len(), 1);
     assert_eq!(feeds[0].feed_id, 1);
@@ -275,7 +274,7 @@ async fn missing_column_or_clause() {
     let rows = provider.query(&query.sql, &query.params).await.expect("scripted query");
 
     let err = Agency::from_row(&rows[0]).expect_err("missing column");
-    assert_eq!(err.kind(), ErrorKind::Invalid);
+    assert_eq!(err.code(), "invalid");
     assert!(err.to_string().contains("row lacks column `url`"), "{err}");
 
     assert!(
@@ -292,6 +291,6 @@ fn oversized_limit() {
     let Err(err) = SelectBuilder::<Agency>::new().limit(u64::MAX).build() else {
         panic!("expected an oversized limit to be refused");
     };
-    let err = err.downcast_ref::<capability::Error>().expect("capability error");
-    assert_eq!(err.kind(), ErrorKind::Invalid);
+    let err = err.downcast_ref::<omnia_sdk::Error>().expect("an omnia_sdk error");
+    assert_eq!(err.code(), "invalid");
 }

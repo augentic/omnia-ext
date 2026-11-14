@@ -3,7 +3,7 @@
 use anyhow::{Result, bail};
 use http::HeaderMap;
 use http::header::{CACHE_CONTROL, IF_NONE_MATCH};
-use omnia_sdk::capability::{self, Error, ErrorKind};
+use omnia_sdk::Error;
 
 /// Caching directives parsed from a request's `Cache-Control` and
 /// `If-None-Match` headers.
@@ -39,15 +39,15 @@ impl Control {
     ///
     /// # Errors
     ///
-    /// Fails with [`ErrorKind::Invalid`] when the directives are malformed or
-    /// conflict.
-    pub fn maybe_from(headers: &HeaderMap) -> capability::Result<Option<Self>> {
+    /// A [`ServerError`](Error::ServerError) with the code `invalid` when the
+    /// directives are malformed or conflict.
+    pub fn maybe_from(headers: &HeaderMap) -> omnia_sdk::Result<Option<Self>> {
         if headers.get(CACHE_CONTROL).is_none() {
             tracing::debug!("no Cache-Control header present");
             return Ok(None);
         }
         Self::parse(headers).map_err(|e| {
-            Error::new(ErrorKind::Invalid, format!("issue parsing Cache-Control headers: {e:#}"))
+            Error::server_error("invalid", format!("issue parsing Cache-Control headers: {e:#}"))
         })
     }
 

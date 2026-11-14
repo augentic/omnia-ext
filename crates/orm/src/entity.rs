@@ -1,6 +1,6 @@
 use anyhow::bail;
 use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
-use omnia_sdk::capability::{self, Error, ErrorKind};
+use omnia_sdk::{Error, Result};
 use sea_query::{Value as SeaValue, Values};
 
 use super::join::Join;
@@ -15,9 +15,9 @@ pub trait FetchValue: Sized {
     ///
     /// # Errors
     ///
-    /// Fails with [`ErrorKind::Invalid`] if the column is missing or the value cannot be
-    /// converted to the target type.
-    fn fetch(row: &Row, col: &str) -> capability::Result<Self>;
+    /// A [`ServerError`](Error::ServerError) with the code `invalid` if the
+    /// column is missing or the value cannot be converted to the target type.
+    fn fetch(row: &Row, col: &str) -> Result<Self>;
 }
 
 /// Trait for database entities with metadata for query building.
@@ -48,9 +48,9 @@ pub trait Entity: Sized {
     ///
     /// # Errors
     ///
-    /// Fails with [`ErrorKind::Invalid`] if any required column is missing or cannot be
-    /// converted to the expected type.
-    fn from_row(row: &Row) -> capability::Result<Self>;
+    /// A [`ServerError`](Error::ServerError) with the code `invalid` if any
+    /// required column is missing or cannot be converted to the expected type.
+    fn from_row(row: &Row) -> Result<Self>;
 }
 
 /// Internal trait for extracting entity values. Automatically implemented by the `entity!` macro.
@@ -92,33 +92,33 @@ fn to_wasi_param(value: SeaValue) -> anyhow::Result<Value> {
     Ok(value)
 }
 
-fn signed(value: u64) -> capability::Result<i64> {
+fn signed(value: u64) -> Result<i64> {
     i64::try_from(value).map_err(|e| {
-        let message = format!("{value} exceeds `i64::MAX`, the widest portable SQL integer");
-        Error::new(ErrorKind::Invalid, message).with_source(e)
+        let message = format!("{value} exceeds `i64::MAX`, the widest portable SQL integer: {e}");
+        Error::server_error("invalid", message)
     })
 }
 
 impl FetchValue for DateTime<Utc> {
-    fn fetch(row: &Row, col: &str) -> capability::Result<Self> {
+    fn fetch(row: &Row, col: &str) -> Result<Self> {
         parse_timestamp(col, row.get(col)?)
     }
 }
 
 impl FetchValue for NaiveDate {
-    fn fetch(row: &Row, col: &str) -> capability::Result<Self> {
+    fn fetch(row: &Row, col: &str) -> Result<Self> {
         parse_date(col, row.get(col)?)
     }
 }
 
 impl FetchValue for serde_json::Value {
-    fn fetch(row: &Row, col: &str) -> capability::Result<Self> {
+    fn fetch(row: &Row, col: &str) -> Result<Self> {
         parse_json(col, row_field(row, col)?)
     }
 }
 
 impl<T: FetchValue> FetchValue for Option<T> {
-    fn fetch(row: &Row, col: &str) -> capability::Result<Self> {
+    fn fetch(row: &Row, col: &str) -> Result<Self> {
         // Only SQL NULL maps to `None`; a missing column is a projection bug
         // and propagates as an error rather than masquerading as NULL.
         if row_field(row, col)?.is_null() { Ok(None) } else { T::fetch(row, col).map(Some) }
@@ -128,8 +128,8 @@ impl<T: FetchValue> FetchValue for Option<T> {
 macro_rules! fetch {
     ($($ty:ty),* $(,)?) => {$(
         impl FetchValue for $ty {
-            fn fetch(row: &Row, col: &str) -> capability::Result<Self> {
-                Ok(row.get(col)?)
+            fn fetch(row: &Row, col: &str) -> Result<Self> {
+                row.get(col)
             }
         }
     )*};
@@ -137,15 +137,15 @@ macro_rules! fetch {
 
 fetch!(bool, i32, i64, u32, u64, f32, f64, String, Vec<u8>);
 
-fn row_field<'a>(row: &'a Row, col: &str) -> capability::Result<&'a Value> {
+fn row_field<'a>(row: &'a Row, col: &str) -> Result<&'a Value> {
     row.fields
         .iter()
         .find(|field| field.name == col)
         .map(|field| &field.value)
-        .ok_or_else(|| Error::new(ErrorKind::Invalid, format!("row lacks column `{col}`")))
+        .ok_or_else(|| Error::server_error("invalid", format!("row lacks column `{col}`")))
 }
 
-fn parse_timestamp(col: &str, raw: &str) -> capability::Result<DateTime<Utc>> {
+fn parse_timestamp(col: &str, raw: &str) -> Result<DateTime<Utc>> {
     if let Ok(parsed) = DateTime::parse_from_rfc3339(raw) {
         return Ok(parsed.with_timezone(&Utc));
     }
@@ -157,27 +157,28 @@ fn parse_timestamp(col: &str, raw: &str) -> capability::Result<DateTime<Utc>> {
     let message = format!(
         "column `{col}` holds unsupported timestamp {raw}; expected RFC3339 or \"%Y-%m-%d %H:%M:%S%.f\" format"
     );
-    Err(Error::new(ErrorKind::Invalid, message))
+    Err(Error::server_error("invalid", message))
 }
 
-fn parse_date(col: &str, raw: &str) -> capability::Result<NaiveDate> {
+fn parse_date(col: &str, raw: &str) -> Result<NaiveDate> {
     NaiveDate::parse_from_str(raw, "%Y-%m-%d").map_err(|e| {
-        let message =
-            format!("column `{col}` holds unsupported date {raw}; expected \"%Y-%m-%d\" format");
-        Error::new(ErrorKind::Invalid, message).with_source(e)
+        let message = format!(
+            "column `{col}` holds unsupported date {raw}; expected \"%Y-%m-%d\" format: {e}"
+        );
+        Error::server_error("invalid", message)
     })
 }
 
-fn parse_json(col: &str, value: &Value) -> capability::Result<serde_json::Value> {
+fn parse_json(col: &str, value: &Value) -> Result<serde_json::Value> {
     let parsed = match value {
         Value::Str(Some(raw)) => serde_json::from_str(raw),
         Value::Binary(Some(bytes)) => serde_json::from_slice(bytes),
         other => {
             let message = format!("column `{col}` is not JSON text or bytes: {other:?}");
-            return Err(Error::new(ErrorKind::Invalid, message));
+            return Err(Error::server_error("invalid", message));
         }
     };
     parsed.map_err(|e| {
-        Error::new(ErrorKind::Invalid, format!("column `{col}` is not valid JSON")).with_source(e)
+        Error::server_error("invalid", format!("column `{col}` is not valid JSON: {e}"))
     })
 }

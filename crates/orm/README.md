@@ -50,7 +50,7 @@ before converting it). All of the types below satisfy this:
 
 `omnia:sql` marks its unsigned types non-portable, so unsigned values bind
 as `Int64`, and a `u64` past `i64::MAX` fails to build. `from_row` fails
-with `ErrorKind::Invalid` on a missing column, a mismatched value, or text
+with the code `invalid` on a missing column, a mismatched value, or text
 that does not parse. A missing column is a projection bug and fails even
 for an `Option<T>` field; only SQL `NULL` maps to `None`.
 
@@ -171,8 +171,7 @@ to an `omnia_sdk::SqlDb`; on `wasm32`, `omnia_sdk::WasiProvider` implements
 
 ```rust,ignore
 use omnia_orm::{Entity, Filter, SelectBuilder};
-use omnia_sdk::capability::Result;
-use omnia_sdk::{SqlDb, WasiProvider};
+use omnia_sdk::{Result, SqlDb, WasiProvider};
 
 let query = SelectBuilder::<Agency>::new()
     .r#where(Filter::eq("agency_id", id))

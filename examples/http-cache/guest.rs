@@ -14,13 +14,13 @@ use bytes::Bytes;
 use http::Method;
 use http::header::{CACHE_CONTROL, IF_NONE_MATCH};
 use omnia_http_cache::HttpCache;
-use omnia_sdk::api::{Client, Context, Handlers, Router};
+use omnia_sdk::api::{Context, Handlers, Router};
 use omnia_sdk::{ConfigExt as _, HttpClient as _, WasiProvider};
 
 omnia_sdk::api::http::export!(router);
 
 fn router(provider: WasiProvider) -> Router<WasiProvider> {
-    Handlers::new().route("/cached", get(cached)).with_state(Client::new(provider))
+    Handlers::new().route("/cached", get(cached)).with_state(provider)
 }
 
 /// The first call reaches the origin; later calls within `max-age` are served

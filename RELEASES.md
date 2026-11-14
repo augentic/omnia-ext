@@ -7,10 +7,11 @@ Unreleased
 - **Breaking:** `HttpCache` implements `HttpClient` over `Request<Bytes>`
   and keys entries on `store_key`, a portable key derived from the
   entity-tag, so an entry an older cache wrote is a miss. A malformed
-  `Cache-Control` fails with `ErrorKind::Invalid`.
+  `Cache-Control` fails with the code `invalid`.
 - **Breaking:** `omnia-orm` re-exports `Value` in place of `DataType`,
-  `Entity::from_row` and `FetchValue::fetch` return `capability::Result`,
-  and unsigned values bind as `Int64`.
+  `Entity::from_row` and `FetchValue::fetch` return `omnia_sdk::Result`,
+  and unsigned values bind as `Int64`. A row that does not map fails with
+  the code `invalid`.
 
 ---
 
