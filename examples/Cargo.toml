@@ -21,10 +21,9 @@ axum.workspace = true
 bytes.workspace = true
 chrono.workspace = true
 http.workspace = true
-http-body-util.workspace = true
 omnia-http-cache.workspace = true
 omnia-orm.workspace = true
-omnia-sdk = { workspace = true, features = ["http", "sql"] }
+omnia-sdk = { workspace = true, features = ["http"] }
 serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
@@ -38,6 +37,7 @@ http.workspace = true
 http-body-util.workspace = true
 hyper = { workspace = true, features = ["http1", "server"] }
 hyper-util = { workspace = true, features = ["tokio"] }
+omnia-http-cache.workspace = true
 omnia-test = { workspace = true, features = ["host"] }
 serde_json.workspace = true
 tokio = { workspace = true, features = ["macros", "net", "rt"] }
