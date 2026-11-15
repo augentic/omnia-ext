@@ -7,7 +7,7 @@ doc-valid-idents = [
   "WebSockets",
 ]
 
-# Derived from `cargo tree -d` (host and `--target wasm32-wasip2`) plus
+# Derived from `cargo tree -d` (host and `--target wasm32-wasip3`) plus
 # lockfile-wide version duplicates that clippy's cargo lint sees on every
 # platform (windows-*, r-efi, embedded-io).
 allowed-duplicate-crates = [
@@ -21,7 +21,6 @@ allowed-duplicate-crates = [
   "darling_macro",
   "digest",
   "embedded-io",
-  "foldhash",
   "getrandom",
   "hashbrown",
   "io-lifetimes",
@@ -29,7 +28,6 @@ allowed-duplicate-crates = [
   "lock_api",
   "parking_lot",
   "parking_lot_core",
-  "prettyplease",
   "r-efi",
   "rand",
   "rand_chacha",
@@ -44,7 +42,6 @@ allowed-duplicate-crates = [
   "wasm-encoder",
   "wasm-metadata",
   "wasmparser",
-  "wast",
   "windows-sys",
   "windows-targets",
   "windows_aarch64_gnullvm",

@@ -1,4 +1,4 @@
-//! Compiles the example guests to `wasm32-wasip2` components for the
+//! Compiles the example guests to `wasm32-wasip3` components for the
 //! component rung (`tests/component.rs`, `tests/orm.rs`) and generates
 //! `gen.rs` with their path constants (`HTTP_CACHE_WASM`, `ORM_WASM`) for the
 //! native side to `include!`.

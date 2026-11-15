@@ -36,7 +36,7 @@ All from the repository root through `make` ([`Makefile`](Makefile) → mise). T
 make ci # exactly the CI jobs: fmt-check + lint + test + test-docs + docs + vet + deny — run before handing over
 make check # local advisories: audit + fmt (rewrites) + lint + outdated + deps
 make test # cargo nextest run --locked --workspace --all-features, under -Dwarnings
-make lint # lint-host (cargo clippy --workspace --all-targets --all-features, then cargo hack --each-feature), then lint-wasm (the same over every lib, bin and example for wasm32-wasip2 — never tests)
+make lint # lint-host (cargo clippy --workspace --all-targets --all-features, then cargo hack --each-feature), then lint-wasm (the same over every lib, bin and example for wasm32-wasip3 — never tests)
 make fmt # cargo +nightly fmt --all
 make vet-regen # regenerate cargo-vet imports/exemptions/unpublished, then vet
 make cov # cargo llvm-cov nextest --workspace --all-features --summary-only

@@ -1,7 +1,7 @@
 //! Component rung: the ORM example guest, compiled to a component, through
 //! the example host's own wiring.
 //!
-//! `build.rs` compiles `orm/guest.rs` to a `wasm32-wasip2` component and
+//! `build.rs` compiles `orm/guest.rs` to a `wasm32-wasip3` component and
 //! `gen.rs` names it (`ORM_WASM`). `orm/runtime.rs` is included as
 //! `production`, so the `Hooks` its `runtime!` generates — the exact host
 //! rows the example binary links — assemble the runtime over

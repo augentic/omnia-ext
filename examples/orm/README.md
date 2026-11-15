@@ -18,11 +18,11 @@ Or, more manually, for debugging:
 
 ```bash
 # build the guest
-cargo build -p examples --example orm-wasm --target wasm32-wasip2
+cargo build -p examples --example orm-wasm --target wasm32-wasip3
 
 # run the host
 export RUST_LOG="info,opentelemetry_sdk=off,omnia_wasi_sql=debug,omnia_wasi_http=debug,omnia_orm=debug,orm=debug"
-cargo run -p examples --example orm -- run ./target/wasm32-wasip2/debug/examples/orm_wasm.wasm
+cargo run -p examples --example orm -- run ./target/wasm32-wasip3/debug/examples/orm_wasm.wasm
 ```
 
 ## Test

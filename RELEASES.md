@@ -4,6 +4,8 @@ Unreleased
 
 ### Changed
 
+- **Breaking:** MSRV is Rust 1.100, and guests build for `wasm32-wasip3`,
+  because omnia 0.38 runs WASI 0.3 guests alone.
 - **Breaking:** `HttpCache` implements `HttpClient` over `Request<Bytes>`
   and keys entries on `store_key`, a portable key derived from the
   entity-tag, so an entry an older cache wrote is a miss. A malformed

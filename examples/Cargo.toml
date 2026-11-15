@@ -43,9 +43,11 @@ serde_json.workspace = true
 tokio = { workspace = true, features = ["macros", "net", "rt"] }
 
 # The fixture rung: `build.rs` compiles the example guest to a
-# `wasm32-wasip2` component for the tests to boot.
+# `wasm32-wasip3` component for the tests to boot.
 [build-dependencies]
 omnia-test = { workspace = true, features = ["build"] }
+
+[lints]
 
 [[example]]
 name = "http-cache-wasm"

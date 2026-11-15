@@ -3,7 +3,7 @@
 Guest-side libraries that compose on [omnia](https://github.com/augentic/omnia)
 capability traits. They are not part of the runtime: omnia never depends on
 this repository. Each crate is an opt-in decorator or helper that a guest
-wraps around the SDK, and the same code runs inside a `wasm32-wasip2`
+wraps around the SDK, and the same code runs inside a `wasm32-wasip3`
 component and against `omnia_test` doubles natively.
 
 ## Relation to omnia
@@ -67,7 +67,7 @@ The suite is laid out as omnia's three rungs (see omnia's
 [Testing Omnia-Based Code](https://github.com/augentic/omnia/blob/main/docs/guides/testing-omnia-code.md)
 guide) plus a build gate for the example hosts. Everything runs under
 `mise run test`: nothing is `#[ignore]`d, and nothing needs installing
-beyond `rust-toolchain.toml`, which carries the `wasm32-wasip2` target the
+beyond `rust-toolchain.toml`, which carries the `wasm32-wasip3` target the
 component rung compiles for.
 
 ### Handler rung
@@ -93,7 +93,7 @@ large for a portable integer refusing to build.
 ### Component rung
 
 `examples/tests/component.rs` boots the HTTP cache example guest — compiled
-to a `wasm32-wasip2` component by `examples/build.rs` — through the example
+to a `wasm32-wasip3` component by `examples/build.rs` — through the example
 host's own `runtime!` wiring over `omnia_test::host::Backends`. A loopback
 origin records hits; one scenario, `cached_miss_then_hit`, asserts both
 handler responses, a single origin fetch, and the keyvalue envelope under
@@ -117,7 +117,7 @@ their wiring is exercised.
 ## Development
 
 ```shell
-mise run ci     # fmt-check, clippy (native, then wasm32-wasip2), test, test-docs, docs, vet, deny
+mise run ci     # fmt-check, clippy (native, then wasm32-wasip3), test, test-docs, docs, vet, deny
 mise run check  # local advisories: audit, fmt (in place), lint, outdated, deps
 ```
 
@@ -129,7 +129,7 @@ tasks are included from
 by `mise.toml`, which adds only the example `build`/`run` tasks and a `wasm`
 release build of the guests.
 
-Clippy runs twice: natively with `--all-targets`, then for `wasm32-wasip2`
+Clippy runs twice: natively with `--all-targets`, then for `wasm32-wasip3`
 over libs and examples only (never tests or benches). The whole workspace is
 in the wasm32 scope, so every runtime example stays `cfg_select!`-gated to an empty
 `main` on wasm32 and every host-only integration test stays
@@ -137,7 +137,7 @@ in the wasm32 scope, so every runtime example stays `cfg_select!`-gated to an em
 `mise run vet-regen`; `vet` itself only checks.
 
 The workspace follows omnia's conventions: stable toolchain
-(`rust-toolchain.toml`, with the `wasm32-wasip2` target), edition 2024,
+(`rust-toolchain.toml`, with the `wasm32-wasip3` target), edition 2024,
 workspace lints, `cargo vet` supply-chain audits (`supply-chain/`), and CI as
 thin wrappers over the reusable workflows in `augentic/toolkit`, pinned to a
 release tag.
