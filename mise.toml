@@ -1,5 +1,5 @@
 [task_config]
-includes = ["git::https://github.com/augentic/toolkit.git//mise/rust.toml?ref=v0.6.0"]
+includes = ["git::https://github.com/augentic/toolkit.git//mise/rust.toml?ref=v0.7.0"]
 
 # No `[env]` knobs: every workspace member is dual-target (host-only tests are
 # `#![cfg(not(target_arch = "wasm32"))]`, runtime examples are `cfg_select!`-gated
@@ -14,13 +14,13 @@ includes = ["git::https://github.com/augentic/toolkit.git//mise/rust.toml?ref=v0
 # forwards those. `mise run` still claims `-h`/`--help` itself, so guest
 # flags go after `--`.
 [tasks.build]
-description = "Build one example guest for wasm32-wasip2: mise run build <name>"
+description = "Build one example guest for wasm32-wasip3: mise run build <name>"
 run = '''
 #!/usr/bin/env bash
 set -euo pipefail
 name="${1:?example name required: mise run build <name>}"
 
-cargo build -p examples --example "${name}-wasm" --target wasm32-wasip2
+cargo build -p examples --example "${name}-wasm" --target wasm32-wasip3
 '''
 
 [tasks.run]
@@ -38,11 +38,11 @@ shift
 export RUST_LOG="${RUST_LOG:-info,opentelemetry_sdk=off,omnia_wasi_http=debug,omnia_http_cache=debug,omnia_wasi_sql=debug,omnia_orm=debug,${module}=debug}"
 
 cargo run -p examples --example "$name" -- \
-  run "${CARGO_TARGET_DIR:-$ws/target}/wasm32-wasip2/debug/examples/${module}_wasm.wasm" -- "$@"
+  run "${CARGO_TARGET_DIR:-$ws/target}/wasm32-wasip3/debug/examples/${module}_wasm.wasm" -- "$@"
 '''
 
 # Release build of every guest (libs and `*-wasm` examples); the shared `lint`
-# already clippies the same scope for wasm32-wasip2 in CI.
+# already clippies the same scope for wasm32-wasip3 in CI.
 [tasks.wasm]
-description = "Release-build the workspace libs and example guests for wasm32-wasip2"
-run = "cargo build --locked --workspace --all-features --lib --examples --target wasm32-wasip2 --release"
+description = "Release-build the workspace libs and example guests for wasm32-wasip3"
+run = "cargo build --locked --workspace --all-features --lib --examples --target wasm32-wasip3 --release"

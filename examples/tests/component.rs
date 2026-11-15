@@ -1,7 +1,7 @@
 //! Component rung: the example guest, compiled to a component, through the
 //! example host's own wiring.
 //!
-//! `build.rs` compiles `http-cache/guest.rs` to a `wasm32-wasip2` component
+//! `build.rs` compiles `http-cache/guest.rs` to a `wasm32-wasip3` component
 //! and `gen.rs` names it (`HTTP_CACHE_WASM`). `http-cache/runtime.rs` is
 //! included as `production`, so the `Hooks` its `runtime!` generates — the
 //! exact host rows the example binary links — assemble the runtime over

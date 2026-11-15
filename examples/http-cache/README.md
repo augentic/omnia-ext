@@ -26,12 +26,12 @@ Or, more manually, for debugging:
 
 ```bash
 # build the guest
-cargo build -p examples --example http-cache-wasm --target wasm32-wasip2
+cargo build -p examples --example http-cache-wasm --target wasm32-wasip3
 
 # run the host
 export UPSTREAM_URL=https://jsonplaceholder.cypress.io/posts/1
 export RUST_LOG="info,opentelemetry_sdk=off,omnia_wasi_http=debug,omnia_http_cache=debug,http_cache=debug"
-cargo run -p examples --example http-cache -- run ./target/wasm32-wasip2/debug/examples/http_cache_wasm.wasm
+cargo run -p examples --example http-cache -- run ./target/wasm32-wasip3/debug/examples/http_cache_wasm.wasm
 ```
 
 ## Test
