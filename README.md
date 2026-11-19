@@ -1,19 +1,18 @@
 # omnia-ext
 
-Guest-side libraries that compose on [omnia](https://github.com/augentic/omnia)
-capability traits. They are not part of the runtime: omnia never depends on
-this repository. Each crate is an opt-in decorator or helper that a guest
-wraps around the SDK, and the same code runs inside a `wasm32-wasip3`
-component and against `omnia_test` doubles natively.
+Guest-side libraries that compose on the guest bindings of
+[omnia](https://github.com/augentic/omnia)'s `omnia-sdk`. They are not part
+of the runtime: omnia never depends on this repository. Each crate is an
+opt-in helper that a guest calls where it wants it, beside the SDK.
 
 ## Relation to omnia
 
 Dependency is strictly one-way. The omnia crates are published crates.io
 dependencies (currently 0.38.0) declared once under
 `[workspace.dependencies]` in `Cargo.toml`, and every `omnia-*` crate moves
-together. Until omnia publishes the 0.38.0 capability contract,
-`[patch.crates-io]` points every `omnia-*` at omnia's `capablities` branch,
-and `cargo update -p omnia-sdk` re-locks them as one. Production backends
+together. Until omnia publishes the bindings-based SDK,
+`[patch.crates-io]` points every `omnia-*` at omnia's default branch, and
+`cargo update -p omnia-sdk` re-locks them as one. Production backends
 live in [omnia-backends](https://github.com/augentic/omnia-backends) and are
 a host-side concern; nothing here talks to them.
 
@@ -21,8 +20,8 @@ a host-side concern; nothing here talks to them.
 
 | Crate | Description |
 | --- | --- |
-| [`omnia-http-cache`](crates/http-cache) | `HttpCache<H, S>` decorator over `HttpClient` + `StateStore`. Requests carrying `Cache-Control` and `If-None-Match` are answered from, and written back through, the injected store. |
-| [`omnia-orm`](crates/orm) | `entity!` mapping and typed `SELECT` / `INSERT` / `UPDATE` / `DELETE` builders that render parameterized SQL for `SqlDb` to execute over `omnia:sql`. |
+| [`omnia-http-cache`](crates/http-cache) | `HttpCache`, an outbound HTTP cache over an `omnia:keyvalue` bucket. Requests carrying `Cache-Control` and `If-None-Match` are answered from, and written back through, the bucket. |
+| [`omnia-orm`](crates/orm) | `entity!` mapping and typed `SELECT` / `INSERT` / `UPDATE` / `DELETE` builders that render parameterized SQL for an `omnia:sql` database to execute. |
 
 ## Quick start
 
@@ -63,34 +62,28 @@ and the builder vocabulary in the crate [README](crates/orm/README.md).
 mise run test              # cargo nextest run --workspace --all-features --locked
 ```
 
-The suite is laid out as omnia's three rungs (see omnia's
+The suite is laid out as omnia's rungs (see omnia's
 [Testing Omnia-Based Code](https://github.com/augentic/omnia/blob/main/docs/guides/testing-omnia-code.md)
 guide) plus a build gate for the example hosts. Everything runs under
 `mise run test`: nothing is `#[ignore]`d, and nothing needs installing
 beyond `rust-toolchain.toml`, which carries the `wasm32-wasip3` target the
-component rung compiles for.
+guests compile for.
 
-### Handler rung
+### Component rung
 
-`crates/http-cache/tests/cache.rs` drives `HttpCache` natively against
-`omnia_test::guest::Provider` (`MatchedHttp` + `Memory`). Scenarios cover
+`crates/http-cache/tests/cache.rs` boots the guest programs under
+`crates/test-programs/programs/http_cache`, compiled to `wasm32-wasip3`
+components by that crate's `build.rs`, through omnia's runtime over
+`omnia_test::host::Backends`. The origin is a `MatchedHttp`. The keyvalue
+store refuses a key that is not portable, and fails every call on its
+`broken` bucket. The guest asserts the responses it sees, and the suite
+asserts what reached the origin and what the bucket kept. Scenarios cover
 miss-then-hit, `no-cache` refresh (with `max-age`) and bypass (without),
 `max-age=0` revalidation, `no-store` bypass, non-2xx and 206 not stored, a corrupt
 entry and a store outage both degrading to the origin, an entity-tag that is
 no portable key cached over a store that refuses such keys, pass-through
 without `Cache-Control` or with only unrecognised directives, and malformed
 directives.
-
-`crates/orm/tests/orm.rs` runs each builder's `Query` through the same
-`Provider`, whose `ScriptedTables` records the SQL text and `$n` parameters
-that reach `SqlDb` and answers with scripted rows. Scenarios cover a
-filtered, ordered, limited select mapped back through `Entity::from_row`
-(including `NULL` → `None` and RFC 3339 timestamps), insert from an entity,
-an `ON CONFLICT` upsert, a filtered update and delete, a JOIN entity with
-aliased columns, a missing column failing row mapping, and a limit too
-large for a portable integer refusing to build.
-
-### Component rung
 
 `examples/tests/component.rs` boots the HTTP cache example guest — compiled
 to a `wasm32-wasip3` component by `examples/build.rs` — through the example
@@ -105,6 +98,17 @@ chains the routes in-process: create an agency, list and update it, add a
 feed, read the feed back through the JOIN entity carrying the updated agency
 name, delete it, read an empty list, and see the second delete answered as
 not found.
+
+### Native tests
+
+`crates/orm/tests/orm.rs` reaches no host, so it runs natively. It asserts
+the SQL text and `$n` parameters each builder renders, and maps rows built
+by hand through `Entity::from_row`. Scenarios cover a filtered, ordered,
+limited select mapped back through `Entity::from_row` (including `NULL` →
+`None` and RFC 3339 timestamps), insert from an entity, an `ON CONFLICT`
+upsert, a filtered update and delete, a JOIN entity with aliased columns, a
+missing column failing row mapping, and a limit too large for a portable
+integer refusing to build.
 
 ### Examples gate
 

@@ -8,12 +8,12 @@
 //! `omnia_test::host::Backends`, whose `omnia:sql` and `wasi:sql` share one
 //! private in-memory `SQLite` that lives for the whole boot. A host the
 //! guest imports but the example does not declare fails here at link time,
-//! which the handler rung in `crates/orm/tests` cannot see.
+//! which the native tests in `crates/orm/tests` cannot see.
 //!
 //! One scenario chains the routes in-process through [`HttpHandler`],
 //! bypassing the socket: rows written by one request are read back by the
 //! next, through the JOIN entity, and gone after the delete. SQL text and
-//! parameter shapes stay with the handler rung.
+//! parameter shapes stay with the native tests.
 
 #![cfg(not(target_arch = "wasm32"))]
 

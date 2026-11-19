@@ -7,13 +7,14 @@
 //! exact host rows the example binary links — assemble the runtime over
 //! `omnia_test::host::Backends`, the in-memory defaults. A host the guest
 //! imports but the example does not declare fails here at link time, which
-//! the handler rung in `crates/http-cache/tests` cannot see.
+//! the e2e suite in `crates/http-cache/tests` cannot see: it links its own
+//! hosts.
 //!
 //! The scenario drives the `wasi:http` export in-process through
 //! [`HttpHandler`], bypassing the socket, against a test-owned loopback
 //! origin, and asserts what reached the origin, what the handler answered,
-//! and what the guest's `StateStore` persisted through the example's
-//! `wasi:keyvalue` host. Header semantics stay with the handler rung.
+//! and what the cache persisted in the `default` bucket through the
+//! example's `omnia:keyvalue` host. Header semantics stay with the e2e suite.
 
 #![cfg(not(target_arch = "wasm32"))]
 
@@ -155,9 +156,9 @@ async fn cached_miss_then_hit() {
     assert_eq!(hits[0].path, "/resource");
     assert!(hits[0].headers.get(IF_NONE_MATCH).is_none(), "If-None-Match is not forwarded");
 
-    // Persisted state: the bucket the guest's `StateStore` opens holds the
-    // serialized response under the etag's `store_key`, with TTL enforced
-    // natively by the bucket.
+    // Persisted state: the `default` bucket the cache writes through holds
+    // the serialized response under the etag's `store_key`, with TTL
+    // enforced natively by the bucket.
     let entry = backends
         .state(&store_key(ETAG_V1))
         .await

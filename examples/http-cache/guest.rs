@@ -1,8 +1,8 @@
 //! # HTTP Cache Wasm Guest
 //!
 //! Serves `GET /cached` by fetching `{UPSTREAM_URL}/resource` through
-//! `HttpCache`, so repeated requests within `max-age` are answered from
-//! `wasi:keyvalue` instead of the origin.
+//! `HttpCache`, so repeated requests within `max-age` are answered from the
+//! `default` keyvalue bucket instead of the origin.
 
 #![cfg(target_arch = "wasm32")]
 
@@ -14,20 +14,21 @@ use bytes::Bytes;
 use http::Method;
 use http::header::{CACHE_CONTROL, IF_NONE_MATCH};
 use omnia_http_cache::HttpCache;
-use omnia_sdk::api::{Context, Handlers, Router};
-use omnia_sdk::{ConfigExt as _, HttpClient as _, WasiProvider};
+use omnia_sdk::api::{Handlers, Router};
+use omnia_sdk::config;
+use omnia_sdk::keyvalue::{DEFAULT, store};
 
 omnia_sdk::api::http::export!(router);
 
-fn router(provider: WasiProvider) -> Router<WasiProvider> {
-    Handlers::new().route("/cached", get(cached)).with_state(provider)
+fn router() -> Router {
+    Handlers::new().route("/cached", get(cached)).into_router()
 }
 
 /// The first call reaches the origin; later calls within `max-age` are served
-/// from the store. Either way the response carries `ETag: "v1"`.
-#[omnia_wasi_otel::instrument]
-async fn cached(context: Context<WasiProvider>) -> omnia_sdk::Result<impl IntoResponse> {
-    let upstream: String = context.config().require("UPSTREAM_URL").await?;
+/// from the bucket. Either way the response carries `ETag: "v1"`.
+#[omnia_sdk::otel::instrument]
+async fn cached() -> omnia_sdk::Result<impl IntoResponse> {
+    let upstream: String = config::require("UPSTREAM_URL").await?;
     tracing::info!("fetching {upstream}/resource through the cache");
 
     let request = http::Request::builder()
@@ -38,8 +39,8 @@ async fn cached(context: Context<WasiProvider>) -> omnia_sdk::Result<impl IntoRe
         .body(Bytes::new())
         .context("building request")?;
 
-    let provider = *context.provider();
-    let response = HttpCache::new(provider, provider).fetch(request).await?;
+    let bucket = store::open(DEFAULT.to_owned()).await?;
+    let response = HttpCache::new(bucket).fetch(request).await?;
     let (parts, body) = response.into_parts();
 
     Ok(http::Response::from_parts(parts, Body::from(body)))

@@ -5,18 +5,16 @@ edition.workspace = true
 rust-version.workspace = true
 version.workspace = true
 
-[dependencies]
-anyhow.workspace = true
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+omnia.workspace = true
 omnia-wasi-config.workspace = true
 omnia-wasi-http.workspace = true
 omnia-wasi-keyvalue.workspace = true
 omnia-wasi-otel.workspace = true
 omnia-wasi-sql.workspace = true
 
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-omnia.workspace = true
-
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+anyhow.workspace = true
 axum.workspace = true
 bytes.workspace = true
 chrono.workspace = true
@@ -27,7 +25,6 @@ omnia-sdk = { workspace = true, features = ["http"] }
 serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
-wasip3.workspace = true
 
 # The component rung (`tests/component.rs`, `tests/orm.rs`): the example
 # runtimes booted in-process over `omnia_test::host::Backends`.

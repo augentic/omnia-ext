@@ -3,8 +3,8 @@
 A lightweight, backend-agnostic object-relational mapper for Omnia guests
 using `omnia:sql`. The `entity!` macro maps a struct to a table and typed
 builders produce parameterized `SELECT` / `INSERT` / `UPDATE` / `DELETE`
-statements as `{ sql, params }` pairs; executing them is left to whatever
-implements `omnia_sdk::SqlDb`. SQL generation is delegated to
+statements as `{ sql, params }` pairs; executing them is left to the
+caller's `omnia:sql` database. SQL generation is delegated to
 [`sea-query`](https://crates.io/crates/sea-query) and the crate re-exports
 `Row`, `Field` and `Value` from `omnia_sdk::sql` so row mapping needs no
 extra dependency.
@@ -165,23 +165,24 @@ entity's defaults.
 ## Usage
 
 Builders know nothing about databases. Hand `query.sql` and `query.params`
-to an `omnia_sdk::SqlDb`; on `wasm32`, `omnia_sdk::WasiProvider` implements
-`SqlDb` over the `omnia:sql` imports. `query` returns rows to map with
-`Entity::from_row`, `execute` returns the affected-row count:
+to a database opened with `omnia_sdk::sql::store::open`.
+`Database::query_as` returns rows to map with `Entity::from_row`, and
+`Database::exec` returns the affected-row count:
 
 ```rust,ignore
-use omnia_orm::{Entity, Filter, SelectBuilder};
-use omnia_sdk::{Result, SqlDb, WasiProvider};
+use omnia_orm::{Entity, Filter, Row, SelectBuilder};
+use omnia_sdk::Result;
+use omnia_sdk::sql::{DEFAULT, store};
 
+let database = store::open(DEFAULT.to_owned()).await?;
 let query = SelectBuilder::<Agency>::new()
     .r#where(Filter::eq("agency_id", id))
     .build()?;
-let rows = WasiProvider.query(&query.sql, &query.params).await?;
+let rows = database.query_as::<Row>(&query.sql, &query.params).await?;
 let agencies = rows.iter().map(Agency::from_row).collect::<Result<Vec<_>>>()?;
 ```
 
-A provider's own handle runs on the `default` database binding, and
-`SqlDb::named` returns a handle on another binding the deployment declares.
-Natively, `omnia_test::guest::Provider` plays the same role: its
-`ScriptedTables` double records the SQL, `$n` params and binding that reach
-`SqlDb` and returns the rows you script.
+`DEFAULT` names the deployment's `default` database, and `store::open`
+opens any other the deployment declares. The builders and `from_row` need
+no host, so the crate's tests assert each rendered `Query` and map rows
+built by hand.
