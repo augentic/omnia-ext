@@ -12,7 +12,7 @@ use bytes::Bytes;
 use http::header::{CACHE_CONTROL, CONTENT_TYPE, ETAG, IF_NONE_MATCH};
 use http::{HeaderValue, Method, Request, Response, StatusCode};
 use omnia_http_cache::{HttpCache, store_key};
-use omnia_sdk::keyvalue::Conflict;
+use omnia_sdk::keyvalue::{Entry, Precondition, Revision};
 use omnia_sdk::{Error, HttpClient as _, Result, StateStore};
 use omnia_test::guest::{MatchedHttp, Memory, Provider};
 
@@ -72,19 +72,23 @@ impl StateStore for BrokenStore {
         Self::outage()
     }
 
+    fn get_entry(&self, _key: &str) -> impl Future<Output = Result<Option<Entry>>> + Send {
+        Self::outage()
+    }
+
     fn set(
         &self, _key: &str, _value: &[u8], _ttl: Option<Duration>,
     ) -> impl Future<Output = Result<()>> + Send {
         Self::outage()
     }
 
-    fn delete(&self, _key: &str) -> impl Future<Output = Result<()>> + Send {
+    fn set_if(
+        &self, _key: &str, _value: &[u8], _ttl: Option<Duration>, _when: Precondition,
+    ) -> impl Future<Output = Result<Result<Revision, Option<Entry>>>> + Send {
         Self::outage()
     }
 
-    fn compare_and_swap(
-        &self, _key: &str, _current: Option<&[u8]>, _new: &[u8], _ttl: Option<Duration>,
-    ) -> impl Future<Output = Result<Result<(), Conflict>>> + Send {
+    fn delete(&self, _key: &str) -> impl Future<Output = Result<()>> + Send {
         Self::outage()
     }
 
@@ -125,21 +129,26 @@ impl StateStore for PortableStore {
         self.0.get(key).await
     }
 
+    async fn get_entry(&self, key: &str) -> Result<Option<Entry>> {
+        Self::checked(key)?;
+        self.0.get_entry(key).await
+    }
+
     async fn set(&self, key: &str, value: &[u8], ttl: Option<Duration>) -> Result<()> {
         Self::checked(key)?;
         self.0.set(key, value, ttl).await
     }
 
+    async fn set_if(
+        &self, key: &str, value: &[u8], ttl: Option<Duration>, when: Precondition,
+    ) -> Result<Result<Revision, Option<Entry>>> {
+        Self::checked(key)?;
+        self.0.set_if(key, value, ttl, when).await
+    }
+
     async fn delete(&self, key: &str) -> Result<()> {
         Self::checked(key)?;
         self.0.delete(key).await
-    }
-
-    async fn compare_and_swap(
-        &self, key: &str, current: Option<&[u8]>, new: &[u8], ttl: Option<Duration>,
-    ) -> Result<Result<(), Conflict>> {
-        Self::checked(key)?;
-        self.0.compare_and_swap(key, current, new, ttl).await
     }
 
     async fn increment(&self, key: &str, delta: i64, ttl: Option<Duration>) -> Result<i64> {

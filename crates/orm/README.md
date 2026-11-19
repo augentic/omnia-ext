@@ -46,10 +46,10 @@ before converting it). All of the types below satisfy this:
 | `chrono::NaiveDate` | any text case (`%Y-%m-%d`) | `Date` |
 | `chrono::DateTime<Utc>` | any text case (RFC 3339 or `%Y-%m-%d %H:%M:%S%.f`) | `Timestamp` (RFC 3339) |
 | `serde_json::Value` | `Str` or `Binary` holding JSON | — |
-| `Option<T>` | SQL `NULL` → `None`, otherwise as `T` | as `T`, `None` → `NULL` |
+| `Option<T>` | SQL `NULL` → `None`, otherwise as `T` | as `T`, `None` → `Null` |
 
-`omnia:sql` marks its unsigned types non-portable, so unsigned values bind
-as `Int64`, and a `u64` past `i64::MAX` fails to build. `from_row` fails
+`omnia:sql` has no unsigned integer, so unsigned values bind as `Int64`,
+and a `u64` past `i64::MAX` fails to build. `from_row` fails
 with the code `invalid` on a missing column, a mismatched value, or text
 that does not parse. A missing column is a projection bug and fails even
 for an `Option<T>` field; only SQL `NULL` maps to `None`.
