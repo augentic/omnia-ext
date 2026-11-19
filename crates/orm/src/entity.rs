@@ -63,27 +63,30 @@ pub fn to_wasi_params(values: Values) -> anyhow::Result<Vec<Value>> {
     values.into_iter().map(to_wasi_param).collect()
 }
 
-// `omnia:sql` marks its unsigned types non-portable, so unsigned values bind
-// as `Int64`.
+// `omnia:sql` has no unsigned integer, so unsigned values bind as `Int64`.
 fn to_wasi_param(value: SeaValue) -> anyhow::Result<Value> {
     let value = match value {
-        SeaValue::Bool(v) => Value::Boolean(v),
-        SeaValue::TinyInt(v) => Value::Int32(v.map(i32::from)),
-        SeaValue::SmallInt(v) => Value::Int32(v.map(i32::from)),
-        SeaValue::Int(v) => Value::Int32(v),
-        SeaValue::BigInt(v) => Value::Int64(v),
-        SeaValue::TinyUnsigned(v) => Value::Int64(v.map(i64::from)),
-        SeaValue::SmallUnsigned(v) => Value::Int64(v.map(i64::from)),
-        SeaValue::Unsigned(v) => Value::Int64(v.map(i64::from)),
-        SeaValue::BigUnsigned(v) => Value::Int64(v.map(signed).transpose()?),
-        SeaValue::Float(v) => Value::Float(v),
-        SeaValue::Double(v) => Value::Double(v),
-        SeaValue::String(v) => Value::Str(v),
-        SeaValue::ChronoDate(v) => Value::Date(v.map(|value| value.to_string())),
-        SeaValue::ChronoTime(v) => Value::Time(v.map(|value| value.to_string())),
-        SeaValue::ChronoDateTime(v) => Value::Timestamp(v.map(|value| value.to_string())),
-        SeaValue::ChronoDateTimeUtc(v) => Value::Timestamp(v.map(|value| value.to_rfc3339())),
-        SeaValue::Char(v) => Value::Str(v.map(|ch| ch.to_string())),
+        SeaValue::Bool(v) => Value::from(v),
+        SeaValue::TinyInt(v) => Value::from(v.map(i32::from)),
+        SeaValue::SmallInt(v) => Value::from(v.map(i32::from)),
+        SeaValue::Int(v) => Value::from(v),
+        SeaValue::BigInt(v) => Value::from(v),
+        SeaValue::TinyUnsigned(v) => Value::from(v.map(i64::from)),
+        SeaValue::SmallUnsigned(v) => Value::from(v.map(i64::from)),
+        SeaValue::Unsigned(v) => Value::from(v.map(i64::from)),
+        SeaValue::BigUnsigned(v) => Value::from(v.map(signed).transpose()?),
+        SeaValue::Float(v) => Value::from(v),
+        SeaValue::Double(v) => Value::from(v),
+        SeaValue::String(v) => Value::from(v),
+        SeaValue::ChronoDate(v) => v.map_or(Value::Null, |value| Value::Date(value.to_string())),
+        SeaValue::ChronoTime(v) => v.map_or(Value::Null, |value| Value::Time(value.to_string())),
+        SeaValue::ChronoDateTime(v) => {
+            v.map_or(Value::Null, |value| Value::Timestamp(value.to_string()))
+        }
+        SeaValue::ChronoDateTimeUtc(v) => {
+            v.map_or(Value::Null, |value| Value::Timestamp(value.to_rfc3339()))
+        }
+        SeaValue::Char(v) => Value::from(v.map(String::from)),
         SeaValue::Bytes(v) => Value::from(v),
         _ => {
             bail!("unsupported values require explicit conversion before building the query")
@@ -171,8 +174,8 @@ fn parse_date(col: &str, raw: &str) -> Result<NaiveDate> {
 
 fn parse_json(col: &str, value: &Value) -> Result<serde_json::Value> {
     let parsed = match value {
-        Value::Str(Some(raw)) => serde_json::from_str(raw),
-        Value::Binary(Some(bytes)) => serde_json::from_slice(bytes),
+        Value::Str(raw) => serde_json::from_str(raw),
+        Value::Binary(bytes) => serde_json::from_slice(bytes),
         other => {
             let message = format!("column `{col}` is not JSON text or bytes: {other:?}");
             return Err(Error::server_error("invalid", message));

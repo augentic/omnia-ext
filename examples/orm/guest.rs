@@ -1,6 +1,6 @@
 //! # ORM Wasm Guest
 //!
-//! Demonstrates `omnia-orm` over the WASI SQL interface: raw prepared
+//! Demonstrates `omnia-orm` over the WASI SQL interface: raw `execute`
 //! statements for the schema, then `SelectBuilder`, `InsertBuilder`,
 //! `UpdateBuilder`, `DeleteBuilder`, and an `entity!` JOIN mapping, all
 //! executed through the SDK's `SqlDb` capability with parameterized
@@ -18,8 +18,7 @@ use omnia_orm::{
 };
 use omnia_sdk::api::{Context, Handlers, Router};
 use omnia_sdk::{SqlDb as _, WasiProvider, sql};
-use omnia_wasi_sql::readwrite;
-use omnia_wasi_sql::types::{Connection, Statement};
+use omnia_wasi_sql::omnia::store;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -184,12 +183,10 @@ async fn delete_feed(
     Ok(Json(json!({ "message": "feed deleted", "feed_id": id })))
 }
 
-/// Create the schema with raw prepared statements. Each request is handled by
-/// a fresh guest instance, so this runs per request — fine for an example.
+/// Create the schema with raw statements. Each request is handled by a fresh
+/// guest instance, so this runs per request — fine for an example.
 async fn ensure_schema() -> anyhow::Result<()> {
-    let pool = Connection::open(sql::DEFAULT.to_owned())
-        .await
-        .map_err(|e| anyhow!("opening connection: {}", e.trace()))?;
+    let database = store::open(sql::DEFAULT.to_owned()).await.context("opening the database")?;
 
     let create_agency = "CREATE TABLE IF NOT EXISTS agency (
         agency_id BIGINT PRIMARY KEY,
@@ -199,13 +196,7 @@ async fn ensure_schema() -> anyhow::Result<()> {
         created_at TEXT NOT NULL
     )";
 
-    let stmt = Statement::prepare(create_agency.to_string(), vec![])
-        .await
-        .map_err(|e| anyhow!("preparing agency table creation: {}", e.trace()))?;
-
-    readwrite::exec(&pool, &stmt)
-        .await
-        .map_err(|e| anyhow!("creating agency table: {}", e.trace()))?;
+    database.execute(create_agency.to_string(), vec![]).await.context("creating agency table")?;
 
     let create_feed = "CREATE TABLE IF NOT EXISTS feed (
         feed_id BIGINT PRIMARY KEY,
@@ -214,13 +205,7 @@ async fn ensure_schema() -> anyhow::Result<()> {
         created_at TEXT NOT NULL
     )";
 
-    let stmt = Statement::prepare(create_feed.to_string(), vec![])
-        .await
-        .map_err(|e| anyhow!("preparing feed table creation: {}", e.trace()))?;
-
-    readwrite::exec(&pool, &stmt)
-        .await
-        .map_err(|e| anyhow!("creating feed table: {}", e.trace()))?;
+    database.execute(create_feed.to_string(), vec![]).await.context("creating feed table")?;
 
     Ok(())
 }

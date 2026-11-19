@@ -78,8 +78,8 @@ async fn filtered_select() {
         vec![row(vec![
             ("agency_id", Value::from(7_i64)),
             ("name", Value::from("Metro")),
-            ("url", Value::Str(None)),
-            ("created_at", Value::Timestamp(Some(stamp.to_owned()))),
+            ("url", Value::Null),
+            ("created_at", Value::Timestamp(stamp.to_owned())),
         ])],
     );
     let provider = Provider::default().sql(scripted);
@@ -126,7 +126,7 @@ async fn insert_from_entity() {
     let affected = provider.execute(&query.sql, &query.params).await.expect("scripted execute");
     assert_eq!(affected, 1);
 
-    // Every field travels, in declaration order; `None` is a typed NULL and
+    // Every field travels, in declaration order; `None` binds as `NULL` and
     // the timestamp is bound as RFC 3339.
     let statement = only_statement(&provider);
     assert_eq!(
@@ -138,8 +138,8 @@ async fn insert_from_entity() {
         [
             Value::from(7_i64),
             Value::from("Metro"),
-            Value::Str(None),
-            Value::Timestamp(Some("2024-01-15T10:30:45+00:00".to_owned())),
+            Value::Null,
+            Value::Timestamp("2024-01-15T10:30:45+00:00".to_owned()),
         ]
     );
 }
@@ -265,7 +265,7 @@ async fn missing_column_or_clause() {
         vec![row(vec![
             ("agency_id", Value::from(7_i64)),
             ("name", Value::from("Metro")),
-            ("created_at", Value::Timestamp(Some("2024-01-15 10:30:45".to_owned()))),
+            ("created_at", Value::Timestamp("2024-01-15 10:30:45".to_owned())),
         ])],
     );
     let provider = Provider::default().sql(scripted);

@@ -42,7 +42,7 @@ unused_result_ok = "warn"
 [workspace.dependencies]
 anyhow = "1.0.104"
 axum = { version = "0.8.9", default-features = false, features = ["json"] }
-bytes = "1.12.1"
+bytes = "1.12.2"
 chrono = "0.4.45"
 http = "1.5.0"
 http-body-util = "0.1.5"

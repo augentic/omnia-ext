@@ -1,7 +1,7 @@
 # ORM Example
 
 Demonstrates `omnia-orm` over `omnia:sql` using the default (in-memory)
-implementation: raw `wasi:sql` prepared statements for schema creation, then
+implementation: raw `omnia:sql` statements for schema creation, then
 one endpoint per query builder — `SelectBuilder`, `InsertBuilder`,
 `UpdateBuilder`, `DeleteBuilder` — plus an `entity!` JOIN mapping across a
 two-table agency/feed schema. Every query runs through the SDK's `SqlDb`
@@ -55,7 +55,7 @@ curl -X DELETE http://localhost:8080/feeds/1
 
 ## Features Demonstrated
 
-- **Prepared statements** — schema creation via `Statement::prepare` + `readwrite::exec`
+- **Raw statements** — schema creation via `store::open` + `database.execute`
 - **ORM entities** — the `entity!` macro, including a JOIN entity with column aliasing
 - **Query builders** — `SelectBuilder` (with `order_by_desc`, `limit`), `InsertBuilder`, `UpdateBuilder`, `DeleteBuilder`
 - **Parameterized filters** — `Filter::eq` WHERE clauses (`$1`, `$2`, ... placeholders)
