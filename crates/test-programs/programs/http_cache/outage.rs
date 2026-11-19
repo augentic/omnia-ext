@@ -10,12 +10,12 @@ use bytes::Bytes;
 use http::header::{CACHE_CONTROL, ETAG, IF_NONE_MATCH};
 use http::{HeaderValue, Request, StatusCode};
 use omnia_http_cache::HttpCache;
-use omnia_sdk::keyvalue::store;
+use omnia_sdk::keyvalue;
 
-omnia_sdk::api::command::export!(scenario);
+omnia_sdk::command::export!(scenario);
 
 async fn scenario() {
-    let bucket = store::open("broken".to_owned()).await.expect("open the broken bucket");
+    let bucket = keyvalue::open("broken").await.expect("open the broken bucket");
     let cache = HttpCache::new(bucket);
 
     for _ in 1..=2 {

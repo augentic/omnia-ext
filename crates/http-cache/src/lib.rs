@@ -8,7 +8,7 @@ use std::time::Duration;
 use bytes::Bytes;
 use http::header::{ETAG, IF_NONE_MATCH};
 use http::{HeaderValue, Request, Response, StatusCode};
-use omnia_sdk::keyvalue::bucket::Bucket;
+use omnia_sdk::keyvalue::Bucket;
 use omnia_sdk::{Error, Result};
 use sha2::{Digest, Sha256};
 
@@ -95,14 +95,14 @@ impl HttpCache {
 // logged rather than propagated.
 impl HttpCache {
     async fn read_entry(&self, etag: &str) -> Option<Response<Bytes>> {
-        let hit = match self.bucket.get(store_key(etag)).await {
+        let hit = match self.bucket.read(&store_key(etag)).await {
             Ok(hit) => hit?,
             Err(e) => {
                 tracing::warn!("cache read for etag `{etag}` failed, treating as a miss: {e:#}");
                 return None;
             }
         };
-        match deserialize(&hit.value) {
+        match deserialize(&hit) {
             Ok(response) => {
                 tracing::debug!("cache hit for etag `{etag}`");
                 Some(response)
@@ -127,9 +127,8 @@ impl HttpCache {
                 return;
             }
         };
-        let lifetime = Duration::from_secs(max_age).into();
-        let written = self.bucket.set(store_key(etag), bytes, lifetime, None).await;
-        if let Err(e) = written.map_err(Error::from).and_then(|set| set.map_err(Error::from)) {
+        let ttl = Some(Duration::from_secs(max_age));
+        if let Err(e) = self.bucket.write(&store_key(etag), &bytes, ttl).await {
             tracing::warn!(
                 "caching response for etag `{etag}` failed, returning it uncached: {e:#}"
             );

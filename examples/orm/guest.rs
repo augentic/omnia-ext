@@ -15,13 +15,12 @@ use chrono::Utc;
 use omnia_orm::{
     DeleteBuilder, Entity, Filter, InsertBuilder, Join, Row, SelectBuilder, UpdateBuilder, entity,
 };
-use omnia_sdk::api::{Handlers, Router};
-use omnia_sdk::sql::database::Database;
-use omnia_sdk::sql::{DEFAULT, store};
+use omnia_sdk::sql::{self, Database};
+use omnia_sdk::{Handlers, Router};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-omnia_sdk::api::http::export!(router);
+omnia_sdk::http::export!(router);
 
 fn router() -> Router {
     Handlers::new()
@@ -183,7 +182,7 @@ async fn delete_feed(Path(id): Path<i64>) -> omnia_sdk::Result<Json<Value>> {
 /// Each request is handled by a fresh guest instance, so this runs per
 /// request — fine for an example.
 async fn database() -> anyhow::Result<Database> {
-    let database = store::open(DEFAULT.to_owned()).await.context("opening the database")?;
+    let database = sql::open(sql::DEFAULT).await.context("opening the database")?;
 
     let create_agency = "CREATE TABLE IF NOT EXISTS agency (
         agency_id BIGINT PRIMARY KEY,

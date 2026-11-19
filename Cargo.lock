@@ -1901,17 +1901,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dae608c151f68243f2b000364e1f7b186d9c29845f7d2d85bd31b9ad77ad552b"
 
 [[package]]
-name = "macro-string"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e7b3a5bbb2f63aaa223a671ea1bd0e7bc16bd30ce387324cf63995deaddbbd2"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 3.0.10",
-]
-
-[[package]]
 name = "matchers"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2122,7 +2111,6 @@ dependencies = [
 [[package]]
 name = "omnia"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#8d8789d5b414948e56c124f448c9e553da3b8968"
 dependencies = [
  "anyhow",
  "futures",
@@ -2142,7 +2130,6 @@ dependencies = [
 [[package]]
 name = "omnia-cli"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#8d8789d5b414948e56c124f448c9e553da3b8968"
 dependencies = [
  "anyhow",
  "clap",
@@ -2151,7 +2138,6 @@ dependencies = [
 [[package]]
 name = "omnia-compile"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#8d8789d5b414948e56c124f448c9e553da3b8968"
 dependencies = [
  "anyhow",
  "wasmtime",
@@ -2160,7 +2146,6 @@ dependencies = [
 [[package]]
 name = "omnia-core"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#8d8789d5b414948e56c124f448c9e553da3b8968"
 dependencies = [
  "anyhow",
  "cap-fs-ext",
@@ -2187,7 +2172,6 @@ dependencies = [
 [[package]]
 name = "omnia-guest-macros"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#8d8789d5b414948e56c124f448c9e553da3b8968"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2197,7 +2181,6 @@ dependencies = [
 [[package]]
 name = "omnia-host-macros"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#8d8789d5b414948e56c124f448c9e553da3b8968"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2228,7 +2211,6 @@ dependencies = [
 [[package]]
 name = "omnia-link"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#8d8789d5b414948e56c124f448c9e553da3b8968"
 dependencies = [
  "anyhow",
  "futures",
@@ -2252,25 +2234,21 @@ dependencies = [
 [[package]]
 name = "omnia-plugin"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#8d8789d5b414948e56c124f448c9e553da3b8968"
 dependencies = [
  "anyhow",
  "cap-std",
  "futures",
  "omnia-core",
- "omnia-wasi-types",
  "thiserror 2.0.21",
  "tokio",
  "tracing",
  "wasm-pkg-client",
  "wasmtime",
- "wit-bindgen 0.63.0",
 ]
 
 [[package]]
 name = "omnia-sdk"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#8d8789d5b414948e56c124f448c9e553da3b8968"
 dependencies = [
  "anyhow",
  "axum",
@@ -2284,37 +2262,27 @@ dependencies = [
  "http-body",
  "http-body-util",
  "omnia-guest-macros",
- "omnia-plugin",
- "omnia-wasi-blobstore",
- "omnia-wasi-config",
- "omnia-wasi-docstore",
- "omnia-wasi-http",
- "omnia-wasi-identity",
- "omnia-wasi-keyvalue",
- "omnia-wasi-messaging",
- "omnia-wasi-model",
- "omnia-wasi-otel",
- "omnia-wasi-sql",
- "omnia-wasi-types",
- "omnia-wasi-vault",
- "omnia-wasi-vcs",
- "omnia-wasi-websocket",
+ "opentelemetry",
  "schemars",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
  "tower",
  "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
  "wasip3",
 ]
 
 [[package]]
 name = "omnia-test"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#8d8789d5b414948e56c124f448c9e553da3b8968"
 dependencies = [
  "anyhow",
+ "bytes",
  "futures",
+ "http",
+ "http-body-util",
  "omnia",
  "omnia-wasi-blobstore",
  "omnia-wasi-config",
@@ -2335,57 +2303,46 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-blobstore"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#8d8789d5b414948e56c124f448c9e553da3b8968"
 dependencies = [
  "anyhow",
  "bytes",
  "futures",
  "omnia-core",
- "omnia-wasi-types",
  "parking_lot 0.13.0",
  "tracing",
  "wasmtime",
- "wit-bindgen 0.63.0",
 ]
 
 [[package]]
 name = "omnia-wasi-config"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#8d8789d5b414948e56c124f448c9e553da3b8968"
 dependencies = [
  "anyhow",
  "futures",
  "omnia-core",
- "omnia-wasi-types",
  "tracing",
  "wasmtime",
- "wit-bindgen 0.63.0",
 ]
 
 [[package]]
 name = "omnia-wasi-docstore"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#8d8789d5b414948e56c124f448c9e553da3b8968"
 dependencies = [
  "anyhow",
  "fromenv",
  "futures",
  "omnia-core",
- "omnia-wasi-types",
  "serde_json",
  "tracing",
  "wasmtime",
  "wasmtime-wasi",
- "wit-bindgen 0.63.0",
 ]
 
 [[package]]
 name = "omnia-wasi-http"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#8d8789d5b414948e56c124f448c9e553da3b8968"
 dependencies = [
  "anyhow",
- "axum",
  "base64ct",
  "bytes",
  "fromenv",
@@ -2399,9 +2356,7 @@ dependencies = [
  "reqwest 0.13.5",
  "rustls",
  "tokio",
- "tower",
  "tracing",
- "wasip3",
  "wasmtime",
  "wasmtime-wasi-http",
  "x509-cert",
@@ -2410,165 +2365,127 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-identity"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#8d8789d5b414948e56c124f448c9e553da3b8968"
 dependencies = [
  "anyhow",
  "fromenv",
  "futures",
  "oauth2",
  "omnia-core",
- "omnia-wasi-types",
  "serde",
  "tracing",
  "wasmtime",
  "wasmtime-wasi",
- "wit-bindgen 0.63.0",
 ]
 
 [[package]]
 name = "omnia-wasi-keyvalue"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#8d8789d5b414948e56c124f448c9e553da3b8968"
 dependencies = [
  "anyhow",
  "fromenv",
  "futures",
  "moka",
  "omnia-core",
- "omnia-wasi-types",
  "tracing",
  "wasmtime",
  "wasmtime-wasi",
- "wit-bindgen 0.63.0",
 ]
 
 [[package]]
 name = "omnia-wasi-messaging"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#8d8789d5b414948e56c124f448c9e553da3b8968"
 dependencies = [
  "anyhow",
  "futures",
  "omnia-core",
- "omnia-wasi-types",
  "thiserror 2.0.21",
  "tokio",
  "tokio-stream",
  "tracing",
  "wasmtime",
  "wasmtime-wasi",
- "wit-bindgen 0.63.0",
 ]
 
 [[package]]
 name = "omnia-wasi-model"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#8d8789d5b414948e56c124f448c9e553da3b8968"
 dependencies = [
  "anyhow",
  "cap-std",
  "fromenv",
  "futures",
  "omnia-core",
- "omnia-wasi-types",
  "serde",
  "serde_json",
  "tokio",
  "tracing",
- "wasip3",
  "wasmtime",
  "wasmtime-wasi",
- "wit-bindgen 0.63.0",
 ]
 
 [[package]]
 name = "omnia-wasi-otel"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#8d8789d5b414948e56c124f448c9e553da3b8968"
 dependencies = [
  "anyhow",
  "futures",
- "getrandom 0.4.3",
  "hex",
  "omnia-core",
- "omnia-guest-macros",
- "omnia-wasi-types",
  "opentelemetry",
  "opentelemetry-proto",
  "opentelemetry_sdk",
  "serde_json",
  "tracing",
  "tracing-opentelemetry",
- "tracing-subscriber",
  "wasmtime",
- "wit-bindgen 0.63.0",
 ]
 
 [[package]]
 name = "omnia-wasi-sql"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#8d8789d5b414948e56c124f448c9e553da3b8968"
 dependencies = [
  "anyhow",
  "chrono",
  "futures",
  "omnia-core",
- "omnia-wasi-types",
  "parking_lot 0.13.0",
  "rusqlite",
  "tokio",
  "tracing",
  "wasmtime",
  "wasmtime-wasi",
- "wit-bindgen 0.63.0",
-]
-
-[[package]]
-name = "omnia-wasi-types"
-version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#8d8789d5b414948e56c124f448c9e553da3b8968"
-dependencies = [
- "wit-bindgen 0.63.0",
 ]
 
 [[package]]
 name = "omnia-wasi-vault"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#8d8789d5b414948e56c124f448c9e553da3b8968"
 dependencies = [
  "anyhow",
  "fromenv",
  "futures",
  "omnia-core",
- "omnia-wasi-types",
  "parking_lot 0.13.0",
  "tracing",
  "wasmtime",
  "wasmtime-wasi",
- "wit-bindgen 0.63.0",
 ]
 
 [[package]]
 name = "omnia-wasi-vcs"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#8d8789d5b414948e56c124f448c9e553da3b8968"
 dependencies = [
  "anyhow",
  "cap-std",
  "omnia-core",
- "omnia-wasi-types",
  "thiserror 2.0.21",
  "tracing",
- "wasip3",
  "wasmtime",
  "wasmtime-wasi",
- "wit-bindgen 0.63.0",
 ]
 
 [[package]]
 name = "omnia-wasi-websocket"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#8d8789d5b414948e56c124f448c9e553da3b8968"
 dependencies = [
  "anyhow",
  "dashmap",
@@ -2577,14 +2494,12 @@ dependencies = [
  "futures-util",
  "getrandom 0.4.3",
  "omnia-core",
- "omnia-wasi-types",
  "tokio",
  "tokio-stream",
  "tokio-tungstenite",
  "tracing",
  "wasmtime",
  "wasmtime-wasi",
- "wit-bindgen 0.63.0",
 ]
 
 [[package]]
@@ -4501,16 +4416,6 @@ dependencies = [
 
 [[package]]
 name = "wasm-encoder"
-version = "0.262.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4495a6f85dd94c411c749303efcbc5defade0b0cbdbc0541495241ab917a9b5a"
-dependencies = [
- "leb128fmt",
- "wasmparser 0.262.0",
-]
-
-[[package]]
-name = "wasm-encoder"
 version = "0.263.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b883a26aea02eaabe2d2c3fba7eb039ef5cdcb5d5201ae5551e73d5e251a81f"
@@ -4541,18 +4446,6 @@ dependencies = [
  "indexmap",
  "wasm-encoder 0.261.0",
  "wasmparser 0.261.0",
-]
-
-[[package]]
-name = "wasm-metadata"
-version = "0.262.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c86ff6668190d9fb70372b306b4f9fe8930f0e2f57ce72e4922bf2f117900949"
-dependencies = [
- "anyhow",
- "indexmap",
- "wasm-encoder 0.262.0",
- "wasmparser 0.262.0",
 ]
 
 [[package]]
@@ -4665,18 +4558,6 @@ dependencies = [
  "indexmap",
  "semver",
  "serde",
-]
-
-[[package]]
-name = "wasmparser"
-version = "0.262.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "974d643b125b272607e2fff8012ea14a8328acd7621e4bafa7afb32500052b1b"
-dependencies = [
- "bitflags",
- "hashbrown 0.17.1",
- "indexmap",
- "semver",
 ]
 
 [[package]]
@@ -5298,50 +5179,6 @@ checksum = "b85a987ab61d365382d25c7d47e26edd48941b3bf6e3fbf76eff918bc71dab06"
 dependencies = [
  "bitflags",
  "futures",
- "wit-bindgen-rust-macro",
-]
-
-[[package]]
-name = "wit-bindgen-core"
-version = "0.63.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "775e122e390603abfacd548027016cd0113a6e2bf2f8ce6bdd3658b013456ea8"
-dependencies = [
- "anyhow",
- "heck",
- "wit-parser 0.262.0",
-]
-
-[[package]]
-name = "wit-bindgen-rust"
-version = "0.63.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84e26e13b9d972026778d2ffb7985736de116026fdc8d9464f966e12df2eb240"
-dependencies = [
- "anyhow",
- "heck",
- "indexmap",
- "prettyplease",
- "syn 3.0.10",
- "wasm-metadata 0.262.0",
- "wit-bindgen-core",
- "wit-component 0.262.0",
-]
-
-[[package]]
-name = "wit-bindgen-rust-macro"
-version = "0.63.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16a008a0d6b4840677326beb4edbeb210a2f1b7d0183fb7cc33f466b90fd7fb6"
-dependencies = [
- "anyhow",
- "macro-string",
- "prettyplease",
- "proc-macro2",
- "quote",
- "syn 3.0.10",
- "wit-bindgen-core",
- "wit-bindgen-rust",
 ]
 
 [[package]]
@@ -5380,25 +5217,6 @@ dependencies = [
  "wasm-metadata 0.261.0",
  "wasmparser 0.261.0",
  "wit-parser 0.261.0",
-]
-
-[[package]]
-name = "wit-component"
-version = "0.262.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "078def49fdb49cab405c3006e05793b3fdaf7069126ba6b9c97d01ec8c98fe4c"
-dependencies = [
- "anyhow",
- "bitflags",
- "indexmap",
- "log",
- "serde",
- "serde_derive",
- "serde_json",
- "wasm-encoder 0.262.0",
- "wasm-metadata 0.262.0",
- "wasmparser 0.262.0",
- "wit-parser 0.262.0",
 ]
 
 [[package]]
@@ -5457,25 +5275,6 @@ dependencies = [
  "serde_json",
  "unicode-ident",
  "wasmparser 0.261.0",
-]
-
-[[package]]
-name = "wit-parser"
-version = "0.262.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "00f0dc051466ffe46787721fca3d088536f158ae400be044f1b1c386ba9397ad"
-dependencies = [
- "anyhow",
- "hashbrown 0.17.1",
- "id-arena",
- "indexmap",
- "log",
- "semver",
- "serde",
- "serde_derive",
- "serde_json",
- "unicode-ident",
- "wasmparser 0.262.0",
 ]
 
 [[package]]

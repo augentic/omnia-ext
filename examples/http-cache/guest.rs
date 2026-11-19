@@ -14,11 +14,9 @@ use bytes::Bytes;
 use http::Method;
 use http::header::{CACHE_CONTROL, IF_NONE_MATCH};
 use omnia_http_cache::HttpCache;
-use omnia_sdk::api::{Handlers, Router};
-use omnia_sdk::config;
-use omnia_sdk::keyvalue::{DEFAULT, store};
+use omnia_sdk::{Handlers, Router, config, keyvalue};
 
-omnia_sdk::api::http::export!(router);
+omnia_sdk::http::export!(router);
 
 fn router() -> Router {
     Handlers::new().route("/cached", get(cached)).into_router()
@@ -39,7 +37,7 @@ async fn cached() -> omnia_sdk::Result<impl IntoResponse> {
         .body(Bytes::new())
         .context("building request")?;
 
-    let bucket = store::open(DEFAULT.to_owned()).await?;
+    let bucket = keyvalue::open(keyvalue::DEFAULT).await?;
     let response = HttpCache::new(bucket).fetch(request).await?;
     let (parts, body) = response.into_parts();
 

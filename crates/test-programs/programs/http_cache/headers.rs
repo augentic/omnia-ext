@@ -10,15 +10,13 @@ use bytes::Bytes;
 use http::header::{CACHE_CONTROL, CONTENT_DISPOSITION, CONTENT_TYPE, ETAG, IF_NONE_MATCH};
 use http::{HeaderName, HeaderValue, Request, Response, StatusCode};
 use omnia_http_cache::{HttpCache, store_key};
-use omnia_sdk::keyvalue::bucket::Bucket;
-use omnia_sdk::keyvalue::types::Lifetime;
-use omnia_sdk::keyvalue::{DEFAULT, store};
+use omnia_sdk::keyvalue::{self, Bucket};
 
 const ORIGIN_ETAG: &str = "\"origin\"";
 const PAYLOAD: &[u8] = b"payload";
 const DISPOSITION: &[u8] = b"attachment; filename=\"r\xE9sum\xE9.pdf\"";
 
-omnia_sdk::api::command::export!(scenario);
+omnia_sdk::command::export!(scenario);
 
 async fn scenario() {
     let client = Client::open().await;
@@ -193,7 +191,7 @@ impl Client {
     }
 
     async fn bucket() -> Bucket {
-        store::open(DEFAULT.to_owned()).await.expect("open the default bucket")
+        keyvalue::open(keyvalue::DEFAULT).await.expect("open the default bucket")
     }
 
     async fn fetch(&self, path: &str, headers: &[(HeaderName, &str)]) -> Response<Bytes> {
@@ -209,8 +207,7 @@ impl Client {
     }
 
     async fn plant(&self, etag: &str, value: &[u8]) {
-        let set = self.bucket.set(store_key(etag), value.to_vec(), Lifetime::Forever, None).await;
-        set.expect("plant an entry").expect("an unconditional set conflicted");
+        self.bucket.write(&store_key(etag), value, None).await.expect("plant an entry");
     }
 }
 

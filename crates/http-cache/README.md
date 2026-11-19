@@ -62,9 +62,9 @@ Open the bucket the cache stores responses in, and fetch through the cache:
 
 ```rust,ignore
 use omnia_http_cache::HttpCache;
-use omnia_sdk::keyvalue::{DEFAULT, store};
+use omnia_sdk::keyvalue;
 
-let cache = HttpCache::new(store::open(DEFAULT.to_owned()).await?);
+let cache = HttpCache::new(keyvalue::open(keyvalue::DEFAULT).await?);
 let request = http::Request::get("https://origin.example/resource")
     .header(http::header::CACHE_CONTROL, "max-age=300")
     .header(http::header::IF_NONE_MATCH, "\"v1\"")

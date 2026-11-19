@@ -165,16 +165,15 @@ entity's defaults.
 ## Usage
 
 Builders know nothing about databases. Hand `query.sql` and `query.params`
-to a database opened with `omnia_sdk::sql::store::open`.
+to a database opened with `omnia_sdk::sql::open`.
 `Database::query_as` returns rows to map with `Entity::from_row`, and
 `Database::exec` returns the affected-row count:
 
 ```rust,ignore
 use omnia_orm::{Entity, Filter, Row, SelectBuilder};
-use omnia_sdk::Result;
-use omnia_sdk::sql::{DEFAULT, store};
+use omnia_sdk::{Result, sql};
 
-let database = store::open(DEFAULT.to_owned()).await?;
+let database = sql::open(sql::DEFAULT).await?;
 let query = SelectBuilder::<Agency>::new()
     .r#where(Filter::eq("agency_id", id))
     .build()?;
@@ -182,7 +181,7 @@ let rows = database.query_as::<Row>(&query.sql, &query.params).await?;
 let agencies = rows.iter().map(Agency::from_row).collect::<Result<Vec<_>>>()?;
 ```
 
-`DEFAULT` names the deployment's `default` database, and `store::open`
+`sql::DEFAULT` names the deployment's `default` database, and `sql::open`
 opens any other the deployment declares. The builders and `from_row` need
 no host, so the crate's tests assert each rendered `Query` and map rows
 built by hand.
