@@ -4,13 +4,13 @@ Demonstrates caching outbound HTTP responses with `omnia-http-cache`.
 
 This example shows how to:
 
-- Wrap the SDK's `HttpClient` capability in `HttpCache` at the call site
-- Store responses through `wasi:keyvalue` using the SDK's `StateStore`
+- Fetch through `HttpCache` at the call site
+- Store responses in the `default` `omnia:keyvalue` bucket
 - Drive the cache with `Cache-Control: max-age` and `If-None-Match`
 
 The guest serves `GET /cached`, which fetches `{UPSTREAM_URL}/resource`
 through the cache. The first request reaches the origin and the response is
-stored for 300 seconds; every request after that is answered from the store.
+stored for 300 seconds; every request after that is answered from the bucket.
 
 ## Quick Start
 
@@ -40,7 +40,7 @@ cargo run -p examples --example http-cache -- run ./target/wasm32-wasip3/debug/e
 # first call: origin hit, response stored under the etag's store_key
 curl -i http://localhost:8080/cached
 
-# second call: served from the store; no upstream request is logged
+# second call: served from the bucket; no upstream request is logged
 curl -i http://localhost:8080/cached
 ```
 

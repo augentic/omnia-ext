@@ -1,462 +1,268 @@
-//! Tests for the `HttpCache` decorator driven exactly as a guest invokes it,
-//! with the outbound request recorded by `MatchedHttp` and the stored copy
-//! read back from `Memory`.
+//! End-to-end tests for `HttpCache`: each program under
+//! `crates/test-programs/programs/http_cache` runs as a real guest component
+//! through the omnia runtime. It fetches from a [`MatchedHttp`] origin and
+//! caches in a keyvalue store that, like NATS, refuses a key that is not
+//! portable. The guest asserts the responses and refusals it sees; this side
+//! asserts what reached the origin and what the bucket kept.
 
-// Host-only: the test doubles are `not(wasm32)` dev-dependencies.
 #![cfg(not(target_arch = "wasm32"))]
 
-use std::future::{Future, ready};
+use std::sync::Arc;
 use std::time::Duration;
 
 use bytes::Bytes;
-use http::header::{CACHE_CONTROL, CONTENT_TYPE, ETAG, IF_NONE_MATCH};
-use http::{HeaderValue, Method, Request, Response, StatusCode};
-use omnia_http_cache::{HttpCache, store_key};
-use omnia_sdk::keyvalue::{Entry, Precondition, Revision};
-use omnia_sdk::{Error, HttpClient as _, Result, StateStore};
-use omnia_test::guest::{MatchedHttp, Memory, Provider};
+use http::header::{CONTENT_DISPOSITION, CONTENT_TYPE, ETAG, IF_NONE_MATCH};
+use http::{HeaderValue, Method, Response, StatusCode};
+use omnia::{ExitStatus, Provides};
+use omnia_http_cache::store_key;
+use omnia_test::host::{Backends, Deployment, MatchedHttp};
+use omnia_wasi_http::WasiHttp;
+use omnia_wasi_keyvalue::{
+    Bucket, Entry, Error, FutureResult, KeyValueClient, KeyValueDefault, Lifetime, Precondition,
+    Revision, WasiKeyValue,
+};
+use omnia_wasi_otel::WasiOtel;
+use serde_json::{Value, json};
 
-const URL: &str = "https://origin.test/resource";
-const ETAG_V1: &str = "\"v1\"";
-const NAMESPACED_ETAG: &str = "\"fleet:route=1&stop=2\"";
-const ORIGIN_ETAG: &str = "\"origin\"";
-const PAYLOAD: &[u8] = b"payload";
+test_programs::foreach_http_cache!();
 
-/// A provider whose origin answers `GET /resource` with `status` and the
-/// fixture body, carrying its own `ETag` so stamping is observable.
-fn provider(status: StatusCode) -> Provider {
-    let mut response = Response::new(Bytes::from_static(PAYLOAD));
-    *response.status_mut() = status;
-    response.headers_mut().insert(ETAG, HeaderValue::from_static(ORIGIN_ETAG));
-    response.headers_mut().insert(CONTENT_TYPE, HeaderValue::from_static("text/plain"));
-    response.headers_mut().insert(
-        http::header::CONTENT_DISPOSITION,
-        HeaderValue::from_bytes(b"attachment; filename=\"r\xE9sum\xE9.pdf\"").expect("obs-text"),
+#[tokio::test]
+async fn http_cache_headers() {
+    let origin = origin(&[
+        ("hit", StatusCode::OK),
+        ("refresh", StatusCode::OK),
+        ("multiline", StatusCode::OK),
+        ("bypass", StatusCode::OK),
+        ("revalidate", StatusCode::OK),
+        ("no-store", StatusCode::OK),
+        ("error", StatusCode::INTERNAL_SERVER_ERROR),
+        ("partial", StatusCode::PARTIAL_CONTENT),
+        ("corrupt", StatusCode::OK),
+        ("namespaced", StatusCode::OK),
+        ("plain", StatusCode::OK),
+        ("unknown", StatusCode::OK),
+    ]);
+    let backends = Backends::defaults().await;
+    let store = Strict(backends.keyvalue.clone());
+    let backends = backends.keyvalue(store).http(origin.clone());
+
+    run_guest(test_programs::HTTP_CACHE_HEADERS, backends.clone()).await;
+
+    // one request per miss, and none for a hit or a refused directive
+    let requests = origin.requests();
+    let paths: Vec<_> = requests.iter().map(|request| request.uri.path()).collect();
+    assert_eq!(
+        paths,
+        [
+            "/hit",
+            "/refresh",
+            "/refresh",
+            "/multiline",
+            "/bypass",
+            "/revalidate",
+            "/no-store",
+            "/error",
+            "/partial",
+            "/corrupt",
+            "/namespaced",
+            "/plain",
+            "/unknown",
+            "/unknown",
+        ]
     );
-    Provider::default().http(MatchedHttp::default().on(Method::GET, URL, response))
-}
 
-fn request(headers: &[(http::HeaderName, &'static str)]) -> Request<Bytes> {
-    let mut request = Request::get(URL);
-    for (name, value) in headers {
-        request = request.header(name, *value);
+    // the cache owns conditional semantics, so the origin never answers a 304
+    // in place of the resource; only a request it does not act on goes as sent
+    let conditional: Vec<_> = requests
+        .iter()
+        .filter_map(|request| {
+            let etag = request.headers.get(IF_NONE_MATCH)?;
+            Some((request.uri.path(), etag.as_bytes()))
+        })
+        .collect();
+    assert_eq!(
+        conditional,
+        [("/plain", b"\"plain\"".as_slice()), ("/unknown", b"\"unknown\"".as_slice())]
+    );
+
+    // what the bucket holds under an etag's key, and the envelope the crate
+    // writes there as JSON
+    let stored = async |etag: &str| {
+        let stored = backends.state(&store_key(etag)).await;
+        stored.map(|bytes| String::from_utf8(bytes).expect("a UTF-8 entry"))
+    };
+    let envelope = async |etag: &str| -> Value {
+        let stored = stored(etag).await.unwrap_or_else(|| panic!("no entry for {etag}"));
+        serde_json::from_str(&stored).expect("an envelope is JSON")
+    };
+
+    // the miss stored the stamped response, every header value as bytes
+    let miss = envelope("\"v1\"").await;
+    assert_eq!(miss["status"], 200);
+    assert_eq!(miss["body"], json!(b"payload"));
+    let headers = miss["headers"].as_array().expect("an envelope's headers");
+    assert!(headers.contains(&json!(["etag", b"\"v1\""])), "{headers:?}");
+
+    // a refresh over one line or two and a corrupt entry hold the origin's
+    // response, and a namespaced etag is stored under its portable key
+    for etag in ["\"refresh\"", "\"multiline\"", "\"corrupt\"", "\"fleet:route=1&stop=2\""] {
+        assert_eq!(envelope(etag).await["status"], 200, "{etag}");
     }
-    request.body(Bytes::new()).expect("valid request")
-}
 
-fn etag(response: &Response<Bytes>) -> Option<&str> {
-    response.headers().get(ETAG).map(|v| v.to_str().expect("ascii etag"))
-}
+    // a bypass and a revalidation leave the entry they found
+    assert_eq!(stored("\"bypass\"").await.as_deref(), Some("existing"));
+    assert_eq!(stored("\"revalidate\"").await.as_deref(), Some("stale"));
 
-/// The stored envelope, as the JSON the crate writes.
-fn stored(provider: &Provider) -> Option<serde_json::Value> {
-    provider
-        .storage
-        .state(&store_key(ETAG_V1))
-        .map(|bytes| serde_json::from_slice(&bytes).expect("valid JSON"))
-}
-
-/// A `StateStore` whose every call fails, standing in for a keyvalue outage.
-struct BrokenStore;
-
-impl BrokenStore {
-    fn outage<T: Send>() -> impl Future<Output = Result<T>> + Send {
-        ready(Err(Error::bad_gateway("unavailable", "store unavailable")))
+    for etag in ["\"no-store\"", "\"error\"", "\"partial\"", "\"plain\"", "\"unknown\"", "\"bad\""]
+    {
+        assert_eq!(stored(etag).await, None, "{etag}");
     }
 }
 
-impl StateStore for BrokenStore {
-    type Named = Self;
+#[tokio::test]
+async fn http_cache_outage() {
+    let origin = origin(&[("outage", StatusCode::OK)]);
+    let backends = Backends::defaults().await;
+    let store = Strict(backends.keyvalue.clone());
+    let backends = backends.keyvalue(store).http(origin.clone());
 
-    fn get(&self, _key: &str) -> impl Future<Output = Result<Option<Bytes>>> + Send {
-        Self::outage()
+    run_guest(test_programs::HTTP_CACHE_OUTAGE, backends).await;
+
+    let paths: Vec<_> =
+        origin.requests().iter().map(|request| request.uri.path().to_owned()).collect();
+    assert_eq!(paths, ["/outage", "/outage"]);
+}
+
+async fn run_guest<B>(wasm: &str, backends: B)
+where
+    B: Provides<WasiHttp> + Provides<WasiKeyValue> + Provides<WasiOtel>,
+{
+    let status = Deployment::new()
+        .guest("guest", wasm)
+        .run(backends, |deployment| {
+            deployment.host::<WasiHttp>()?;
+            deployment.host::<WasiKeyValue>()?;
+            deployment.host::<WasiOtel>()?;
+            Ok(())
+        })
+        .await
+        .expect("guest runs");
+    assert_eq!(status, ExitStatus::SUCCESS, "guest `{wasm}` failed");
+}
+
+// an origin answering `GET https://origin.test/<path>` with its status, its
+// own `ETag` so stamping shows, and a header value outside ASCII
+fn origin(paths: &[(&str, StatusCode)]) -> MatchedHttp {
+    paths.iter().fold(MatchedHttp::default(), |origin, (path, status)| {
+        let mut response = Response::new(Bytes::from_static(b"payload"));
+        *response.status_mut() = *status;
+        let headers = response.headers_mut();
+        headers.insert(ETAG, HeaderValue::from_static("\"origin\""));
+        headers.insert(CONTENT_TYPE, HeaderValue::from_static("text/plain"));
+        let disposition = HeaderValue::from_bytes(b"attachment; filename=\"r\xE9sum\xE9.pdf\"");
+        headers.insert(CONTENT_DISPOSITION, disposition.expect("an obs-text header value"));
+        origin.on(Method::GET, format!("https://origin.test/{path}"), response)
+    })
+}
+
+// a keyvalue store that refuses a key that is not portable, and whose
+// `broken` bucket fails every call
+#[derive(Clone, Debug)]
+struct Strict(KeyValueDefault);
+
+impl KeyValueClient for Strict {
+    fn open_bucket(&self, identifier: String) -> FutureResult<Arc<dyn Bucket>> {
+        if identifier == "broken" {
+            return Box::pin(async { Ok(Arc::new(Broken) as Arc<dyn Bucket>) });
+        }
+        let opening = self.0.open_bucket(identifier);
+        Box::pin(async move { Ok(Arc::new(Portable(opening.await?)) as Arc<dyn Bucket>) })
+    }
+}
+
+#[derive(Debug)]
+struct Portable(Arc<dyn Bucket>);
+
+impl Bucket for Portable {
+    fn get(&self, key: String) -> FutureResult<Option<Entry>> {
+        refused(&key).unwrap_or_else(|| self.0.get(key))
     }
 
-    fn get_entry(&self, _key: &str) -> impl Future<Output = Result<Option<Entry>>> + Send {
+    fn set(
+        &self, key: String, value: Vec<u8>, lifetime: Lifetime, when: Option<Precondition>,
+    ) -> FutureResult<Result<Revision, Option<Entry>>> {
+        refused(&key).unwrap_or_else(|| self.0.set(key, value, lifetime, when))
+    }
+
+    fn delete(
+        &self, key: String, when: Option<Revision>,
+    ) -> FutureResult<Result<(), Option<Entry>>> {
+        refused(&key).unwrap_or_else(|| self.0.delete(key, when))
+    }
+
+    fn exists(&self, key: String) -> FutureResult<bool> {
+        refused(&key).unwrap_or_else(|| self.0.exists(key))
+    }
+
+    fn keys(&self) -> FutureResult<Vec<String>> {
+        self.0.keys()
+    }
+
+    fn increment(&self, key: String, delta: i64, ttl: Option<Duration>) -> FutureResult<i64> {
+        refused(&key).unwrap_or_else(|| self.0.increment(key, delta, ttl))
+    }
+}
+
+fn refused<T: Send + 'static>(key: &str) -> Option<FutureResult<T>> {
+    let portable = key.len() <= 255
+        && key.split('.').all(|segment| {
+            !segment.is_empty()
+                && segment
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+        });
+    if portable {
+        return None;
+    }
+    let error = Error::Invalid(format!("`{key}` is not a portable key"));
+    Some(Box::pin(async move { Err(error.into()) }))
+}
+
+#[derive(Debug)]
+struct Broken;
+
+impl Broken {
+    fn outage<T: Send + 'static>() -> FutureResult<T> {
+        Box::pin(async { Err(Error::Unavailable("the suite's store is down".to_owned()).into()) })
+    }
+}
+
+impl Bucket for Broken {
+    fn get(&self, _key: String) -> FutureResult<Option<Entry>> {
         Self::outage()
     }
 
     fn set(
-        &self, _key: &str, _value: &[u8], _ttl: Option<Duration>,
-    ) -> impl Future<Output = Result<()>> + Send {
+        &self, _key: String, _value: Vec<u8>, _lifetime: Lifetime, _when: Option<Precondition>,
+    ) -> FutureResult<Result<Revision, Option<Entry>>> {
         Self::outage()
     }
 
-    fn set_if(
-        &self, _key: &str, _value: &[u8], _ttl: Option<Duration>, _when: Precondition,
-    ) -> impl Future<Output = Result<Result<Revision, Option<Entry>>>> + Send {
+    fn delete(
+        &self, _key: String, _when: Option<Revision>,
+    ) -> FutureResult<Result<(), Option<Entry>>> {
         Self::outage()
     }
 
-    fn delete(&self, _key: &str) -> impl Future<Output = Result<()>> + Send {
+    fn exists(&self, _key: String) -> FutureResult<bool> {
         Self::outage()
     }
 
-    fn increment(
-        &self, _key: &str, _delta: i64, _ttl: Option<Duration>,
-    ) -> impl Future<Output = Result<i64>> + Send {
+    fn keys(&self) -> FutureResult<Vec<String>> {
         Self::outage()
     }
 
-    fn named(&self, _name: &str) -> Self {
-        Self
+    fn increment(&self, _key: String, _delta: i64, _ttl: Option<Duration>) -> FutureResult<i64> {
+        Self::outage()
     }
-}
-
-/// A `StateStore` over `Memory` that, like NATS, refuses a key the
-/// `StateStore` contract does not call portable.
-#[derive(Default)]
-struct PortableStore(Memory);
-
-impl PortableStore {
-    fn checked(key: &str) -> Result<()> {
-        let portable = !key.is_empty()
-            && !key.starts_with('.')
-            && !key.ends_with('.')
-            && key.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'));
-        if !portable {
-            return Err(Error::server_error("invalid", format!("`{key}` is not a portable key")));
-        }
-        Ok(())
-    }
-}
-
-impl StateStore for PortableStore {
-    type Named = Self;
-
-    async fn get(&self, key: &str) -> Result<Option<Bytes>> {
-        Self::checked(key)?;
-        self.0.get(key).await
-    }
-
-    async fn get_entry(&self, key: &str) -> Result<Option<Entry>> {
-        Self::checked(key)?;
-        self.0.get_entry(key).await
-    }
-
-    async fn set(&self, key: &str, value: &[u8], ttl: Option<Duration>) -> Result<()> {
-        Self::checked(key)?;
-        self.0.set(key, value, ttl).await
-    }
-
-    async fn set_if(
-        &self, key: &str, value: &[u8], ttl: Option<Duration>, when: Precondition,
-    ) -> Result<Result<Revision, Option<Entry>>> {
-        Self::checked(key)?;
-        self.0.set_if(key, value, ttl, when).await
-    }
-
-    async fn delete(&self, key: &str) -> Result<()> {
-        Self::checked(key)?;
-        self.0.delete(key).await
-    }
-
-    async fn increment(&self, key: &str, delta: i64, ttl: Option<Duration>) -> Result<i64> {
-        Self::checked(key)?;
-        self.0.increment(key, delta, ttl).await
-    }
-
-    fn named(&self, name: &str) -> Self {
-        Self(self.0.named(name))
-    }
-}
-
-#[tokio::test]
-async fn max_age_miss_then_hit() {
-    let provider = provider(StatusCode::OK);
-    let cache = HttpCache::new(&provider, &provider);
-    let headers = [(CACHE_CONTROL, "max-age=60"), (IF_NONE_MATCH, ETAG_V1)];
-
-    let miss = cache.fetch(request(&headers)).await.expect("should succeed");
-    assert_eq!(miss.status(), StatusCode::OK);
-    assert_eq!(miss.body(), PAYLOAD);
-    assert_eq!(etag(&miss), Some(ETAG_V1));
-
-    // The conditional header stays with the cache: the origin must answer
-    // with the full resource, never a 304.
-    let requests = provider.http.requests();
-    assert_eq!(requests.len(), 1);
-    assert!(!requests[0].headers.contains_key(IF_NONE_MATCH));
-
-    // The stored copy, under the etag's `store_key`, is the stamped response
-    // rather than the origin's. Header values are stored as bytes so nothing
-    // RFC 9110 allows in a field value is lost.
-    let envelope = stored(&provider).expect("response cached");
-    assert_eq!(envelope["status"], 200);
-    assert_eq!(envelope["body"], serde_json::json!(PAYLOAD));
-    assert!(
-        envelope["headers"]
-            .as_array()
-            .expect("headers array")
-            .contains(&serde_json::json!(["etag", ETAG_V1.as_bytes()]))
-    );
-
-    let hit = cache.fetch(request(&headers)).await.expect("should succeed");
-    assert_eq!(hit.status(), StatusCode::OK);
-    assert_eq!(hit.body(), PAYLOAD);
-    assert_eq!(etag(&hit), Some(ETAG_V1));
-    assert_eq!(
-        hit.headers().get(CONTENT_TYPE).map(HeaderValue::as_bytes),
-        Some(b"text/plain".as_slice())
-    );
-    assert_eq!(
-        hit.headers().get(http::header::CONTENT_DISPOSITION).map(HeaderValue::as_bytes),
-        Some(b"attachment; filename=\"r\xE9sum\xE9.pdf\"".as_slice())
-    );
-    assert_eq!(provider.http.requests().len(), 1);
-}
-
-#[tokio::test]
-async fn no_cache_max_age() {
-    let provider = provider(StatusCode::OK);
-    let cache = HttpCache::new(&provider, &provider);
-    let headers = [(CACHE_CONTROL, "no-cache, max-age=60"), (IF_NONE_MATCH, ETAG_V1)];
-
-    for round in 1..=2 {
-        // A stale entry under the key must be bypassed and then replaced.
-        provider.storage.insert_state(&store_key(ETAG_V1), b"stale");
-
-        let response = cache.fetch(request(&headers)).await.expect("should succeed");
-        assert_eq!(response.body(), PAYLOAD);
-        assert_eq!(etag(&response), Some(ETAG_V1));
-        assert_eq!(provider.http.requests().len(), round);
-        assert_eq!(stored(&provider).expect("response cached")["status"], 200);
-    }
-}
-
-#[tokio::test]
-async fn multiline_cache_control() {
-    let provider = provider(StatusCode::OK);
-    let cache = HttpCache::new(&provider, &provider);
-
-    // Two `.header()` calls: one list per RFC 9110 §5.3, so this is the
-    // `no-cache, max-age=60` refresh, not a bare `no-cache` bypass.
-    let headers =
-        [(CACHE_CONTROL, "no-cache"), (CACHE_CONTROL, "max-age=60"), (IF_NONE_MATCH, ETAG_V1)];
-    provider.storage.insert_state(&store_key(ETAG_V1), b"stale");
-
-    let response = cache.fetch(request(&headers)).await.expect("should succeed");
-    assert_eq!(response.body(), PAYLOAD);
-    assert_eq!(provider.http.requests().len(), 1);
-    assert_eq!(stored(&provider).expect("response cached")["status"], 200);
-
-    // And a `no-store` on a later line is seen, so the conflict is refused
-    // before any request leaves.
-    let headers =
-        [(CACHE_CONTROL, "max-age=60"), (CACHE_CONTROL, "no-store"), (IF_NONE_MATCH, ETAG_V1)];
-    let Err(err) = cache.fetch(request(&headers)).await else {
-        panic!("expected conflicting directives error");
-    };
-    assert_eq!(err.code(), "invalid");
-    assert_eq!(provider.http.requests().len(), 1);
-}
-
-#[tokio::test]
-async fn no_cache() {
-    let provider = provider(StatusCode::OK);
-    let cache = HttpCache::new(&provider, &provider);
-    let headers = [(CACHE_CONTROL, "no-cache"), (IF_NONE_MATCH, ETAG_V1)];
-
-    // RFC 9111 §5.2.1.4: the stored copy must not be served unvalidated, but
-    // with no `max-age` there is no lifetime to write the response under, so
-    // the existing entry is left as it was.
-    provider.storage.insert_state(&store_key(ETAG_V1), b"existing");
-
-    let response = cache.fetch(request(&headers)).await.expect("should succeed");
-    assert_eq!(response.body(), PAYLOAD);
-    assert_eq!(etag(&response), Some(ETAG_V1));
-    assert_eq!(provider.http.requests().len(), 1);
-    assert_eq!(
-        provider.storage.state(&store_key(ETAG_V1)).as_deref(),
-        Some(b"existing".as_slice())
-    );
-}
-
-#[tokio::test]
-async fn zero_max_age() {
-    let provider = provider(StatusCode::OK);
-    let cache = HttpCache::new(&provider, &provider);
-    let headers = [(CACHE_CONTROL, "max-age=0"), (IF_NONE_MATCH, ETAG_V1)];
-
-    // RFC 9111 §5.2.1.1: `max-age=0` accepts no stored response, however
-    // fresh, so a populated entry is bypassed rather than served.
-    provider.storage.insert_state(&store_key(ETAG_V1), b"stale");
-
-    let response = cache.fetch(request(&headers)).await.expect("should succeed");
-    assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(response.body(), PAYLOAD);
-    assert_eq!(etag(&response), Some(ETAG_V1));
-    assert_eq!(provider.http.requests().len(), 1);
-
-    // Nor is there a lifetime to store the fresh copy under.
-    assert_eq!(provider.storage.state(&store_key(ETAG_V1)).as_deref(), Some(b"stale".as_slice()));
-}
-
-#[tokio::test]
-async fn no_store() {
-    let provider = provider(StatusCode::OK);
-    let cache = HttpCache::new(&provider, &provider);
-    let headers = [(CACHE_CONTROL, "no-store"), (IF_NONE_MATCH, ETAG_V1)];
-
-    let response = cache.fetch(request(&headers)).await.expect("should succeed");
-    assert_eq!(response.body(), PAYLOAD);
-    assert_eq!(provider.http.requests().len(), 1);
-    assert!(stored(&provider).is_none());
-
-    // `Control` records no etag under `no-store`, and an empty entity-tag is
-    // not valid (RFC 9110 §8.8.3), so the origin's `ETag` is left in place.
-    assert_eq!(etag(&response), Some(ORIGIN_ETAG));
-}
-
-#[tokio::test]
-async fn server_error() {
-    let provider = provider(StatusCode::INTERNAL_SERVER_ERROR);
-    let cache = HttpCache::new(&provider, &provider);
-    let headers = [(CACHE_CONTROL, "max-age=60"), (IF_NONE_MATCH, ETAG_V1)];
-
-    let response = cache.fetch(request(&headers)).await.expect("should succeed");
-    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
-    assert_eq!(response.body(), PAYLOAD);
-    assert_eq!(etag(&response), Some(ETAG_V1));
-    assert_eq!(provider.http.requests().len(), 1);
-    assert!(stored(&provider).is_none());
-}
-
-#[tokio::test]
-async fn partial_content() {
-    let provider = provider(StatusCode::PARTIAL_CONTENT);
-    let cache = HttpCache::new(&provider, &provider);
-    let headers = [(CACHE_CONTROL, "max-age=60"), (IF_NONE_MATCH, ETAG_V1)];
-
-    // RFC 9111 §3: a 206 is storable only by a cache that understands range
-    // combination. This one does not, so the ranged body is returned to the
-    // caller but never keyed as the whole resource.
-    let response = cache.fetch(request(&headers)).await.expect("should succeed");
-    assert_eq!(response.status(), StatusCode::PARTIAL_CONTENT);
-    assert_eq!(response.body(), PAYLOAD);
-    assert_eq!(etag(&response), Some(ETAG_V1));
-    assert_eq!(provider.http.requests().len(), 1);
-    assert!(stored(&provider).is_none());
-}
-
-#[tokio::test]
-async fn corrupt_entry() {
-    let provider = provider(StatusCode::OK);
-    let cache = HttpCache::new(&provider, &provider);
-    let headers = [(CACHE_CONTROL, "max-age=60"), (IF_NONE_MATCH, ETAG_V1)];
-
-    // Whatever is under the key is not an envelope this crate wrote.
-    provider.storage.insert_state(&store_key(ETAG_V1), b"not an envelope");
-
-    let response = cache.fetch(request(&headers)).await.expect("should succeed");
-    assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(response.body(), PAYLOAD);
-    assert_eq!(etag(&response), Some(ETAG_V1));
-    assert_eq!(provider.http.requests().len(), 1);
-
-    // The origin response overwrites the corrupt entry and serves the next call.
-    assert_eq!(stored(&provider).expect("response cached")["status"], 200);
-    let hit = cache.fetch(request(&headers)).await.expect("should succeed");
-    assert_eq!(hit.body(), PAYLOAD);
-    assert_eq!(provider.http.requests().len(), 1);
-}
-
-#[tokio::test]
-async fn store_outage() {
-    let provider = provider(StatusCode::OK);
-    let cache = HttpCache::new(&provider, BrokenStore);
-    let headers = [(CACHE_CONTROL, "max-age=60"), (IF_NONE_MATCH, ETAG_V1)];
-
-    // The read fails, the origin is asked, the write fails: the caller still
-    // gets the response the origin produced, on every call.
-    for round in 1..=2 {
-        let response = cache.fetch(request(&headers)).await.expect("should succeed");
-        assert_eq!(response.status(), StatusCode::OK);
-        assert_eq!(response.body(), PAYLOAD);
-        assert_eq!(etag(&response), Some(ETAG_V1));
-        assert_eq!(provider.http.requests().len(), round);
-    }
-}
-
-#[tokio::test]
-async fn namespaced_etag() {
-    let provider = provider(StatusCode::OK);
-    let store = PortableStore::default();
-    let cache = HttpCache::new(&provider, &store);
-    let headers = [(CACHE_CONTROL, "max-age=60"), (IF_NONE_MATCH, NAMESPACED_ETAG)];
-
-    // The tag's quotes, `:`, `=`, and `&` are not portable key characters, so
-    // a store that refuses such a key still serves the miss's entry as a hit.
-    for _ in 1..=2 {
-        let response = cache.fetch(request(&headers)).await.expect("should succeed");
-        assert_eq!(response.body(), PAYLOAD);
-        assert_eq!(etag(&response), Some(NAMESPACED_ETAG));
-        assert_eq!(provider.http.requests().len(), 1);
-    }
-    assert!(store.0.state(&store_key(NAMESPACED_ETAG)).is_some());
-}
-
-#[tokio::test]
-async fn absent_cache_control() {
-    let provider = provider(StatusCode::OK);
-    let cache = HttpCache::new(&provider, &provider);
-
-    let response = cache.fetch(request(&[(IF_NONE_MATCH, ETAG_V1)])).await.expect("should succeed");
-    assert_eq!(etag(&response), Some(ORIGIN_ETAG));
-
-    let requests = provider.http.requests();
-    assert_eq!(requests.len(), 1);
-    assert_eq!(
-        requests[0].headers.get(IF_NONE_MATCH).map(HeaderValue::as_bytes),
-        Some(ETAG_V1.as_bytes())
-    );
-    assert!(stored(&provider).is_none());
-}
-
-#[tokio::test]
-async fn unknown_directives() {
-    let provider = provider(StatusCode::OK);
-    let cache = HttpCache::new(&provider, &provider);
-
-    // RFC 9111 §5.2.3: nothing here is a directive this cache acts on, so the
-    // request is forwarded exactly as sent, `If-None-Match` included, and the
-    // origin's `ETag` is not rewritten.
-    let headers = [(CACHE_CONTROL, "no-transform"), (IF_NONE_MATCH, ETAG_V1)];
-    let response = cache.fetch(request(&headers)).await.expect("should succeed");
-    assert_eq!(etag(&response), Some(ORIGIN_ETAG));
-
-    let requests = provider.http.requests();
-    assert_eq!(requests.len(), 1);
-    assert_eq!(
-        requests[0].headers.get(IF_NONE_MATCH).map(HeaderValue::as_bytes),
-        Some(ETAG_V1.as_bytes())
-    );
-    assert!(stored(&provider).is_none());
-
-    // And without an etag it is not an error either.
-    cache.fetch(request(&[(CACHE_CONTROL, "no-transform")])).await.expect("should succeed");
-    assert_eq!(provider.http.requests().len(), 2);
-}
-
-#[tokio::test]
-async fn bad_directives() {
-    let provider = provider(StatusCode::OK);
-    let cache = HttpCache::new(&provider, &provider);
-
-    for headers in [
-        vec![(CACHE_CONTROL, "max-age=60")],
-        vec![(CACHE_CONTROL, "max-age=60, max-age=0"), (IF_NONE_MATCH, ETAG_V1)],
-        vec![(CACHE_CONTROL, "no-store, max-age=0"), (IF_NONE_MATCH, ETAG_V1)],
-        vec![(CACHE_CONTROL, "max-age=60"), (IF_NONE_MATCH, "W/\"weak\"")],
-        vec![(CACHE_CONTROL, "max-age=60"), (IF_NONE_MATCH, "\"a\", \"b\"")],
-        vec![(CACHE_CONTROL, "max-age=60"), (IF_NONE_MATCH, "*")],
-        vec![(CACHE_CONTROL, "max-age=60"), (IF_NONE_MATCH, "unquoted")],
-    ] {
-        let Err(err) = cache.fetch(request(&headers)).await else {
-            panic!("expected malformed directives to be refused: {headers:?}");
-        };
-        assert_eq!(err.code(), "invalid", "{headers:?}");
-    }
-    assert!(provider.http.requests().is_empty());
-    assert!(stored(&provider).is_none());
 }

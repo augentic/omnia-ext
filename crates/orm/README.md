@@ -3,8 +3,8 @@
 A lightweight, backend-agnostic object-relational mapper for Omnia guests
 using `omnia:sql`. The `entity!` macro maps a struct to a table and typed
 builders produce parameterized `SELECT` / `INSERT` / `UPDATE` / `DELETE`
-statements as `{ sql, params }` pairs; executing them is left to whatever
-implements `omnia_sdk::SqlDb`. SQL generation is delegated to
+statements as `{ sql, params }` pairs; executing them is left to the
+caller's `omnia:sql` database. SQL generation is delegated to
 [`sea-query`](https://crates.io/crates/sea-query) and the crate re-exports
 `Row`, `Field` and `Value` from `omnia_sdk::sql` so row mapping needs no
 extra dependency.
@@ -40,12 +40,12 @@ before converting it). All of the types below satisfy this:
 | `bool` | `Boolean`, or an integer `0` or `1` | `Boolean` |
 | `i32`, `i64` | any integer case the value fits | `Int32`, `Int64` |
 | `u32`, `u64` | any integer case the value fits | `Int64` |
-| `f32`, `f64` | `Float`; `Float` or `Double` | `Float`, `Double` |
-| `String` | `Str`, `Date`, `Time` or `Timestamp` | `Str` |
+| `f32`, `f64` | `Float32`; `Float32` or `Float64` | `Float32`, `Float64` |
+| `String` | `Text`, `Date`, `Time`, `Timestamp` or `TimestampTz` | `Text` |
 | `Vec<u8>` | `Binary` | `Binary` |
 | `chrono::NaiveDate` | any text case (`%Y-%m-%d`) | `Date` |
-| `chrono::DateTime<Utc>` | any text case (RFC 3339 or `%Y-%m-%d %H:%M:%S%.f`) | `Timestamp` (RFC 3339) |
-| `serde_json::Value` | `Str` or `Binary` holding JSON | — |
+| `chrono::DateTime<Utc>` | any text case (RFC 3339 or `%Y-%m-%d %H:%M:%S%.f`) | `TimestampTz` (RFC 3339) |
+| `serde_json::Value` | `Text` or `Binary` holding JSON | — |
 | `Option<T>` | SQL `NULL` → `None`, otherwise as `T` | as `T`, `None` → `Null` |
 
 `omnia:sql` has no unsigned integer, so unsigned values bind as `Int64`,
@@ -165,23 +165,23 @@ entity's defaults.
 ## Usage
 
 Builders know nothing about databases. Hand `query.sql` and `query.params`
-to an `omnia_sdk::SqlDb`; on `wasm32`, `omnia_sdk::WasiProvider` implements
-`SqlDb` over the `omnia:sql` imports. `query` returns rows to map with
-`Entity::from_row`, `execute` returns the affected-row count:
+to a database opened with `omnia_sdk::sql::open`.
+`Database::query_as` returns rows to map with `Entity::from_row`, and
+`Database::exec` returns the affected-row count:
 
 ```rust,ignore
-use omnia_orm::{Entity, Filter, SelectBuilder};
-use omnia_sdk::{Result, SqlDb, WasiProvider};
+use omnia_orm::{Entity, Filter, Row, SelectBuilder};
+use omnia_sdk::{Result, sql};
 
+let database = sql::open(sql::DEFAULT).await?;
 let query = SelectBuilder::<Agency>::new()
     .r#where(Filter::eq("agency_id", id))
     .build()?;
-let rows = WasiProvider.query(&query.sql, &query.params).await?;
+let rows = database.query_as::<Row>(&query.sql, &query.params).await?;
 let agencies = rows.iter().map(Agency::from_row).collect::<Result<Vec<_>>>()?;
 ```
 
-A provider's own handle runs on the `default` database binding, and
-`SqlDb::named` returns a handle on another binding the deployment declares.
-Natively, `omnia_test::guest::Provider` plays the same role: its
-`ScriptedTables` double records the SQL, `$n` params and binding that reach
-`SqlDb` and returns the rows you script.
+`sql::DEFAULT` names the deployment's `default` database, and `sql::open`
+opens any other the deployment declares. The builders and `from_row` need
+no host, so the crate's tests assert each rendered `Query` and map rows
+built by hand.

@@ -6,14 +6,21 @@ Unreleased
 
 - **Breaking:** MSRV is Rust 1.100, and guests build for `wasm32-wasip3`,
   because omnia 0.38 runs WASI 0.3 guests alone.
-- **Breaking:** `HttpCache` implements `HttpClient` over `Request<Bytes>`
-  and keys entries on `store_key`, a portable key derived from the
-  entity-tag, so an entry an older cache wrote is a miss. A malformed
-  `Cache-Control` fails with the code `invalid`.
+- **Breaking:** `HttpCache` wraps an `omnia:keyvalue` `Bucket` and sends
+  through `omnia_sdk::http::fetch`, as omnia's SDK has no capability traits.
+  `HttpCache::new(bucket).fetch(request)` replaces the `HttpClient` and
+  `StateStore` decorator, so a caller opts in at the call site rather than
+  at provider assembly.
+- **Breaking:** `HttpCache` keys entries on `store_key`, a portable key
+  derived from the entity-tag, so an entry an older cache wrote is a miss.
+  A malformed `Cache-Control` fails with the code `invalid`.
 - **Breaking:** `omnia-orm` re-exports `Value` in place of `DataType`,
   `Entity::from_row` and `FetchValue::fetch` return `omnia_sdk::Result`,
   unsigned values bind as `Int64`, and a `None` field binds as `Null`. A
-  row that does not map fails with the code `invalid`.
+  row that does not map fails with the code `invalid`. A built `Query` runs
+  on an `omnia:sql` `Database`, through `query_as` and `exec`.
+- **Breaking:** `Value`'s cases carry their `omnia:sql` names (`Text`,
+  `Float32`, `Float64`), and a `DateTime<Utc>` binds as `TimestampTz`.
 
 ---
 

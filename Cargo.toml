@@ -54,7 +54,6 @@ serde_json = "1.0.154"
 sha2 = { version = "0.11.1", default-features = false }
 tokio = { version = "1.54.1", default-features = false }
 tracing = "0.1.44"
-wasip3 = { version = "0.10.0", features = ["http-compat"] }
 
 omnia = "0.38.0"
 omnia-sdk = { version = "0.38.0", default-features = false }
@@ -67,6 +66,7 @@ omnia-wasi-sql = "0.38.0"
 
 omnia-http-cache = { path = "crates/http-cache", version = "0.36.0" }
 omnia-orm = { path = "crates/orm", version = "0.36.0" }
+test-programs = { path = "crates/test-programs" }
 
 [patch.crates-io]
 omnia = { git = "https://github.com/augentic/omnia" }
@@ -91,3 +91,10 @@ omnia-wasi-sql = { git = "https://github.com/augentic/omnia" }
 lto = true
 opt-level = "s"
 strip = true
+
+# The e2e suites JIT-compile each guest, and unoptimized cranelift is ~10x
+# slower.
+[profile.dev.package]
+cranelift-codegen = { opt-level = 3 }
+regalloc2 = { opt-level = 3 }
+wasmtime-internal-cranelift = { opt-level = 3 }

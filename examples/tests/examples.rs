@@ -3,9 +3,8 @@
 //! `http-cache/runtime.rs` and `orm/runtime.rs` are server hosts that never
 //! exit, so they are **build-only** here: `cargo build --locked --examples`
 //! from the package root, and exit status 0 is the whole assertion. Behaviour
-//! is not tested here: the handler rungs in `crates/*/tests` drive the
-//! libraries natively, and the component rungs boot these runtimes
-//! in-process. Anything a host links against (the omnia runtime, the `Hooks`
+//! is not tested here: the suites in `crates/*/tests` drive the libraries,
+//! and the component rungs boot these runtimes in-process. Anything a host links against (the omnia runtime, the `Hooks`
 //! wiring, the manifest) drifting far enough to break an example fails this
 //! test before it fails a manual `make run <name>`.
 //!

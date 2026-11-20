@@ -1,10 +1,8 @@
 //! Tests for the query builders driven exactly as a guest uses them: each
-//! built `Query` is executed through `omnia_test::guest::Provider`, whose
-//! `ScriptedTables` records the SQL text and `$n` parameters that reach
-//! `SqlDb` and answers with scripted rows for `Entity::from_row`.
+//! scenario builds a `Query` and asserts the SQL text and `$n` parameters a
+//! guest hands to `omnia:sql`, and maps rows shaped as `omnia:sql` returns
+//! them through `Entity::from_row`.
 
-// Host-only: the test doubles are `not(wasm32)` dev-dependencies.
-#![cfg(not(target_arch = "wasm32"))]
 // `entity!` only accepts `pub` fields, and the fixtures are not an API.
 #![expect(missing_docs, reason = "test fixtures are not a public API")]
 
@@ -13,8 +11,6 @@ use omnia_orm::{
     DeleteBuilder, Entity, Field, Filter, InsertBuilder, Join, Row, SelectBuilder, UpdateBuilder,
     Value, entity,
 };
-use omnia_sdk::SqlDb as _;
-use omnia_test::guest::{Executed, Provider, ScriptedTables};
 
 entity!(
     table = "agency",
@@ -63,58 +59,39 @@ fn row(fields: Vec<(&str, Value)>) -> Row {
     }
 }
 
-/// The one statement a scenario issued.
-fn only_statement(provider: &Provider) -> Executed {
-    let statements = provider.sql.statements();
-    assert_eq!(statements.len(), 1, "statements: {statements:?}");
-    statements.into_iter().next().expect("one statement")
-}
-
-#[tokio::test]
-async fn filtered_select() {
-    let stamp = "2024-01-15T10:30:45+00:00";
-    let scripted = ScriptedTables::default().on_query(
-        |sql, params| sql.starts_with("SELECT") && params.len() == 2,
-        vec![row(vec![
-            ("agency_id", Value::from(7_i64)),
-            ("name", Value::from("Metro")),
-            ("url", Value::Null),
-            ("created_at", Value::Timestamp(stamp.to_owned())),
-        ])],
-    );
-    let provider = Provider::default().sql(scripted);
-
+#[test]
+fn filtered_select() {
     let query = SelectBuilder::<Agency>::new()
         .r#where(Filter::eq("agency_id", 7_i64))
         .order_by_desc(None, "created_at")
         .limit(10)
         .build()
         .expect("select builds");
-    let rows = provider.query(&query.sql, &query.params).await.expect("scripted query");
 
     // The unsigned limit binds as `Int64`, the portable integer.
-    let statement = only_statement(&provider);
-    assert_eq!(statement.binding, "default");
     assert_eq!(
-        statement.sql,
+        query.sql,
         r#"SELECT "agency"."agency_id", "agency"."name", "agency"."url", "agency"."created_at" FROM "agency" WHERE ("agency"."agency_id") = ($1) ORDER BY "agency"."created_at" DESC LIMIT $2"#
     );
-    assert_eq!(statement.params, [Value::from(7_i64), Value::from(10_i64)]);
+    assert_eq!(query.params, [Value::from(7_i64), Value::from(10_i64)]);
 
     // SQL `NULL` maps to `None`; the RFC 3339 timestamp parses to `DateTime<Utc>`.
-    let agencies: Vec<Agency> =
-        rows.iter().map(Agency::from_row).collect::<omnia_sdk::Result<_>>().expect("rows map");
-    assert_eq!(agencies.len(), 1);
-    assert_eq!(agencies[0].agency_id, 7);
-    assert_eq!(agencies[0].name, "Metro");
-    assert_eq!(agencies[0].url, None);
-    assert_eq!(agencies[0].created_at, stamp.parse::<DateTime<Utc>>().expect("rfc3339"));
+    let stamp = "2024-01-15T10:30:45+00:00";
+    let agency = Agency::from_row(&row(vec![
+        ("agency_id", Value::from(7_i64)),
+        ("name", Value::from("Metro")),
+        ("url", Value::Null),
+        ("created_at", Value::TimestampTz(stamp.to_owned())),
+    ]))
+    .expect("the row maps");
+    assert_eq!(agency.agency_id, 7);
+    assert_eq!(agency.name, "Metro");
+    assert_eq!(agency.url, None);
+    assert_eq!(agency.created_at, stamp.parse::<DateTime<Utc>>().expect("rfc3339"));
 }
 
-#[tokio::test]
-async fn insert_from_entity() {
-    let provider = Provider::default()
-        .sql(ScriptedTables::default().on_exec(|sql, _| sql.starts_with("INSERT"), 1));
+#[test]
+fn insert_from_entity() {
     let agency = Agency {
         agency_id: 7,
         name: "Metro".to_owned(),
@@ -123,32 +100,26 @@ async fn insert_from_entity() {
     };
 
     let query = InsertBuilder::<Agency>::from_entity(&agency).build().expect("insert builds");
-    let affected = provider.execute(&query.sql, &query.params).await.expect("scripted execute");
-    assert_eq!(affected, 1);
 
     // Every field travels, in declaration order; `None` binds as `NULL` and
     // the timestamp is bound as RFC 3339.
-    let statement = only_statement(&provider);
     assert_eq!(
-        statement.sql,
+        query.sql,
         r#"INSERT INTO "agency" ("agency_id", "name", "url", "created_at") VALUES ($1, $2, $3, $4)"#
     );
     assert_eq!(
-        statement.params,
+        query.params,
         [
             Value::from(7_i64),
             Value::from("Metro"),
             Value::Null,
-            Value::Timestamp("2024-01-15T10:30:45+00:00".to_owned()),
+            Value::TimestampTz("2024-01-15T10:30:45+00:00".to_owned()),
         ]
     );
 }
 
-#[tokio::test]
-async fn upsert_on_conflict() {
-    let provider = Provider::default()
-        .sql(ScriptedTables::default().on_exec(|sql, _| sql.starts_with("INSERT"), 1));
-
+#[test]
+fn upsert_on_conflict() {
     let query = InsertBuilder::<Feed>::new()
         .set("feed_id", 1_i64)
         .set("agency_id", 7_i64)
@@ -157,123 +128,85 @@ async fn upsert_on_conflict() {
         .do_update_all()
         .build()
         .expect("upsert builds");
-    provider.execute(&query.sql, &query.params).await.expect("scripted execute");
 
-    let statement = only_statement(&provider);
     assert_eq!(
-        statement.sql,
+        query.sql,
         r#"INSERT INTO "feed" ("feed_id", "agency_id", "description") VALUES ($1, $2, $3) ON CONFLICT ("feed_id") DO UPDATE SET "agency_id" = "excluded"."agency_id", "description" = "excluded"."description""#
     );
-    assert_eq!(
-        statement.params,
-        [Value::from(1_i64), Value::from(7_i64), Value::from("Bus routes")]
-    );
+    assert_eq!(query.params, [Value::from(1_i64), Value::from(7_i64), Value::from("Bus routes")]);
 }
 
-#[tokio::test]
-async fn filtered_update() {
-    let provider = Provider::default()
-        .sql(ScriptedTables::default().on_exec(|sql, _| sql.starts_with("UPDATE"), 0));
-
+#[test]
+fn filtered_update() {
     let query = UpdateBuilder::<Agency>::new()
         .set("name", "Metro Transit")
         .set("url", Some("https://metro.test".to_owned()))
         .r#where(Filter::eq("agency_id", 7_i64))
         .build()
         .expect("update builds");
-    let affected = provider.execute(&query.sql, &query.params).await.expect("scripted execute");
 
-    // The affected-row count is the caller's not-found signal.
-    assert_eq!(affected, 0);
-    let statement = only_statement(&provider);
     assert_eq!(
-        statement.sql,
+        query.sql,
         r#"UPDATE "agency" SET "name" = $1, "url" = $2 WHERE ("agency"."agency_id") = ($3)"#
     );
     assert_eq!(
-        statement.params,
+        query.params,
         [Value::from("Metro Transit"), Value::from("https://metro.test"), Value::from(7_i64)]
     );
 }
 
-#[tokio::test]
-async fn filtered_delete() {
-    let provider = Provider::default()
-        .sql(ScriptedTables::default().on_exec(|sql, _| sql.starts_with("DELETE"), 1));
-
+#[test]
+fn filtered_delete() {
     let query = DeleteBuilder::<Feed>::new()
         .r#where(Filter::and([Filter::eq("feed_id", 1_i64), Filter::eq("agency_id", 7_i64)]))
         .build()
         .expect("delete builds");
-    let affected = provider.execute(&query.sql, &query.params).await.expect("scripted execute");
-    assert_eq!(affected, 1);
 
-    let statement = only_statement(&provider);
     assert_eq!(
-        statement.sql,
+        query.sql,
         r#"DELETE FROM "feed" WHERE (("feed"."feed_id") = ($1)) AND (("feed"."agency_id") = ($2))"#
     );
-    assert_eq!(statement.params, [Value::from(1_i64), Value::from(7_i64)]);
+    assert_eq!(query.params, [Value::from(1_i64), Value::from(7_i64)]);
 }
 
-#[tokio::test]
-async fn aliased_join() {
-    let scripted = ScriptedTables::default().on_query(
-        |sql, _| sql.contains("LEFT JOIN"),
-        vec![row(vec![
-            ("feed_id", Value::from(1_i64)),
-            ("description", Value::from("Bus routes")),
-            ("agency_name", Value::from("Metro")),
-        ])],
-    );
-    let provider = Provider::default().sql(scripted);
-
+#[test]
+fn aliased_join() {
     let query = SelectBuilder::<FeedWithAgency>::new()
         .order_by_desc(Some("feed"), "created_at")
         .limit(100)
         .build()
         .expect("join select builds");
-    let rows = provider.query(&query.sql, &query.params).await.expect("scripted query");
 
     // The entity's default join and the aliased projection come from
     // `entity!`; the caller only adds ordering and a limit.
-    let statement = only_statement(&provider);
     assert_eq!(
-        statement.sql,
+        query.sql,
         r#"SELECT "feed"."feed_id", "feed"."description", "agency"."name" AS "agency_name" FROM "feed" LEFT JOIN "agency" ON ("feed"."agency_id") = ("agency"."agency_id") ORDER BY "feed"."created_at" DESC LIMIT $1"#
     );
-    assert_eq!(statement.params, [Value::from(100_i64)]);
+    assert_eq!(query.params, [Value::from(100_i64)]);
 
     // The row maps by the alias, so the joined column lands in its field.
-    let feeds: Vec<FeedWithAgency> = rows
-        .iter()
-        .map(FeedWithAgency::from_row)
-        .collect::<omnia_sdk::Result<_>>()
-        .expect("rows map");
-    assert_eq!(feeds.len(), 1);
-    assert_eq!(feeds[0].feed_id, 1);
-    assert_eq!(feeds[0].description, "Bus routes");
-    assert_eq!(feeds[0].agency_name, "Metro");
+    let feed = FeedWithAgency::from_row(&row(vec![
+        ("feed_id", Value::from(1_i64)),
+        ("description", Value::from("Bus routes")),
+        ("agency_name", Value::from("Metro")),
+    ]))
+    .expect("the row maps");
+    assert_eq!(feed.feed_id, 1);
+    assert_eq!(feed.description, "Bus routes");
+    assert_eq!(feed.agency_name, "Metro");
 }
 
-#[tokio::test]
-async fn missing_column_or_clause() {
+#[test]
+fn missing_column_or_clause() {
     // A projection bug, not a NULL: the row lacks `url` entirely, so even
     // the `Option<String>` field refuses to map.
-    let scripted = ScriptedTables::default().on_query(
-        |_, _| true,
-        vec![row(vec![
-            ("agency_id", Value::from(7_i64)),
-            ("name", Value::from("Metro")),
-            ("created_at", Value::Timestamp("2024-01-15 10:30:45".to_owned())),
-        ])],
-    );
-    let provider = Provider::default().sql(scripted);
-
-    let query = SelectBuilder::<Agency>::new().build().expect("select builds");
-    let rows = provider.query(&query.sql, &query.params).await.expect("scripted query");
-
-    let err = Agency::from_row(&rows[0]).expect_err("missing column");
+    let err = Agency::from_row(&row(vec![
+        ("agency_id", Value::from(7_i64)),
+        ("name", Value::from("Metro")),
+        ("created_at", Value::Timestamp("2024-01-15 10:30:45".to_owned())),
+    ]))
+    .expect_err("missing column");
     assert_eq!(err.code(), "invalid");
     assert!(err.to_string().contains("row lacks column `url`"), "{err}");
 

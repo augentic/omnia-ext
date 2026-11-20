@@ -1,10 +1,11 @@
 # omnia-http-cache
 
-An HTTP response cache for Omnia guests. `HttpCache` decorates any
-`omnia_sdk::HttpClient` so that requests carrying `Cache-Control` and
-`If-None-Match` are answered from, and written back through, an
-`omnia_sdk::StateStore`. Caching is opt-in per call site: wrap the provider
-where cached fetches are wanted and use the bare provider everywhere else.
+An HTTP response cache for Omnia guests. `HttpCache` sends a request through
+`omnia_sdk::http::fetch`. A request carrying `Cache-Control` and
+`If-None-Match` is answered from, and written back through, an
+`omnia:keyvalue` bucket. Caching is opt-in per call site: fetch through an
+`HttpCache` where cached responses are wanted and through
+`omnia_sdk::http::fetch` everywhere else.
 
 ## Header contract
 
@@ -44,9 +45,9 @@ where cached fetches are wanted and use the bare provider everywhere else.
   carries no request etag, so the origin's `ETag` passes through unchanged.
 - The storage key is `store_key(etag)`: `http-cache.` followed by the
   lower-case hex SHA-256 of the `If-None-Match` entity-tag as sent, quotes
-  included. It is a portable `StateStore` key whatever the tag holds, so a
-  backend that refuses `"` or `:` in a key still caches. The injected
-  `StateStore` decides where entries live and the TTL is `max-age`. Header
+  included. It is a portable keyvalue key whatever the tag holds, so a
+  backend that refuses `"` or `:` in a key still caches. The bucket the
+  cache wraps decides where entries live, and the TTL is `max-age`. Header
   values are stored as raw bytes, so `obs-text` (RFC 9110 §5.5) survives a
   round trip.
 - The store never fails a request. A read error or an entry that no longer
@@ -57,14 +58,13 @@ where cached fetches are wanted and use the bare provider everywhere else.
 
 ## Usage
 
-On `wasm32`, `omnia_sdk::WasiProvider` implements all capability traits over
-WASI imports, so it can serve as both transport and store:
+Open the bucket the cache stores responses in, and fetch through the cache:
 
 ```rust,ignore
 use omnia_http_cache::HttpCache;
-use omnia_sdk::{HttpClient, WasiProvider};
+use omnia_sdk::keyvalue;
 
-let cache = HttpCache::new(WasiProvider, WasiProvider);
+let cache = HttpCache::new(keyvalue::open(keyvalue::DEFAULT).await?);
 let request = http::Request::get("https://origin.example/resource")
     .header(http::header::CACHE_CONTROL, "max-age=300")
     .header(http::header::IF_NONE_MATCH, "\"v1\"")
@@ -72,6 +72,5 @@ let request = http::Request::get("https://origin.example/resource")
 let response = cache.fetch(request).await?;
 ```
 
-Natively, wrap an `omnia_test::guest::Provider` (or any other `HttpClient`
-and `StateStore` implementations) the same way; `&P` implements both traits,
-so `HttpCache::new(&provider, &provider)` shares one provider.
+The origin and the bucket are host calls, so a cache runs in a `wasm32-wasip3`
+component. Its tests boot one over `omnia_test::host`.

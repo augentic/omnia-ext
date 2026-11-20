@@ -1,6 +1,6 @@
 # omnia-ext — Agent Instructions
 
-Guest-side libraries that compose on [omnia](https://github.com/augentic/omnia) capability traits; omnia never depends on this repository. [README.md](README.md) is the guide: the [crates](README.md#crates), the [testing rungs](README.md#testing), and the [development loop](README.md#development). The rules below are the organisation's shared conventions; where the README is more specific, it governs.
+Guest-side libraries that compose on the guest bindings of [omnia](https://github.com/augentic/omnia)'s `omnia-sdk`; omnia never depends on this repository. [README.md](README.md) is the guide: the [crates](README.md#crates), the [testing rungs](README.md#testing), and the [development loop](README.md#development). The rules below are the organisation's shared conventions; where the README is more specific, it governs.
 
 ## Git
 
