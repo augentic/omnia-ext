@@ -40,12 +40,12 @@ before converting it). All of the types below satisfy this:
 | `bool` | `Boolean`, or an integer `0` or `1` | `Boolean` |
 | `i32`, `i64` | any integer case the value fits | `Int32`, `Int64` |
 | `u32`, `u64` | any integer case the value fits | `Int64` |
-| `f32`, `f64` | `Float`; `Float` or `Double` | `Float`, `Double` |
-| `String` | `Str`, `Date`, `Time` or `Timestamp` | `Str` |
+| `f32`, `f64` | `Float32`; `Float32` or `Float64` | `Float32`, `Float64` |
+| `String` | `Text`, `Date`, `Time`, `Timestamp` or `TimestampTz` | `Text` |
 | `Vec<u8>` | `Binary` | `Binary` |
 | `chrono::NaiveDate` | any text case (`%Y-%m-%d`) | `Date` |
-| `chrono::DateTime<Utc>` | any text case (RFC 3339 or `%Y-%m-%d %H:%M:%S%.f`) | `Timestamp` (RFC 3339) |
-| `serde_json::Value` | `Str` or `Binary` holding JSON | — |
+| `chrono::DateTime<Utc>` | any text case (RFC 3339 or `%Y-%m-%d %H:%M:%S%.f`) | `TimestampTz` (RFC 3339) |
+| `serde_json::Value` | `Text` or `Binary` holding JSON | — |
 | `Option<T>` | SQL `NULL` → `None`, otherwise as `T` | as `T`, `None` → `Null` |
 
 `omnia:sql` has no unsigned integer, so unsigned values bind as `Int64`,

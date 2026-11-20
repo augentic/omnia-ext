@@ -19,6 +19,8 @@ Unreleased
   unsigned values bind as `Int64`, and a `None` field binds as `Null`. A
   row that does not map fails with the code `invalid`. A built `Query` runs
   on an `omnia:sql` `Database`, through `query_as` and `exec`.
+- **Breaking:** `Value`'s cases carry their `omnia:sql` names (`Text`,
+  `Float32`, `Float64`), and a `DateTime<Utc>` binds as `TimestampTz`.
 
 ---
 

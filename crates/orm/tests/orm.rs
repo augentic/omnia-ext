@@ -81,7 +81,7 @@ fn filtered_select() {
         ("agency_id", Value::from(7_i64)),
         ("name", Value::from("Metro")),
         ("url", Value::Null),
-        ("created_at", Value::Timestamp(stamp.to_owned())),
+        ("created_at", Value::TimestampTz(stamp.to_owned())),
     ]))
     .expect("the row maps");
     assert_eq!(agency.agency_id, 7);
@@ -113,7 +113,7 @@ fn insert_from_entity() {
             Value::from(7_i64),
             Value::from("Metro"),
             Value::Null,
-            Value::Timestamp("2024-01-15T10:30:45+00:00".to_owned()),
+            Value::TimestampTz("2024-01-15T10:30:45+00:00".to_owned()),
         ]
     );
 }

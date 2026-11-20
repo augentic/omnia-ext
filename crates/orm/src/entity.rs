@@ -84,7 +84,7 @@ fn to_wasi_param(value: SeaValue) -> anyhow::Result<Value> {
             v.map_or(Value::Null, |value| Value::Timestamp(value.to_string()))
         }
         SeaValue::ChronoDateTimeUtc(v) => {
-            v.map_or(Value::Null, |value| Value::Timestamp(value.to_rfc3339()))
+            v.map_or(Value::Null, |value| Value::TimestampTz(value.to_rfc3339()))
         }
         SeaValue::Char(v) => Value::from(v.map(String::from)),
         SeaValue::Bytes(v) => Value::from(v),
@@ -174,7 +174,7 @@ fn parse_date(col: &str, raw: &str) -> Result<NaiveDate> {
 
 fn parse_json(col: &str, value: &Value) -> Result<serde_json::Value> {
     let parsed = match value {
-        Value::Str(raw) => serde_json::from_str(raw),
+        Value::Text(raw) => serde_json::from_str(raw),
         Value::Binary(bytes) => serde_json::from_slice(bytes),
         other => {
             let message = format!("column `{col}` is not JSON text or bytes: {other:?}");
