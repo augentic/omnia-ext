@@ -25,9 +25,6 @@ url = "https://raw.githubusercontent.com/mozilla/supply-chain/main/audits.toml"
 [imports.zcash]
 url = "https://raw.githubusercontent.com/zcash/rust-ecosystem/main/supply-chain/audits.toml"
 
-[policy.omnia-http-cache]
-audit-as-crates-io = false
-
 [policy.omnia-orm]
 audit-as-crates-io = false
 
@@ -145,10 +142,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.clap_builder]]
 version = "4.6.7"
-criteria = "safe-to-deploy"
-
-[[exemptions.clap_complete]]
-version = "4.6.12"
 criteria = "safe-to-deploy"
 
 [[exemptions.clap_derive]]
@@ -573,10 +566,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.mach2]]
 version = "0.6.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.macro-string]]
-version = "0.3.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.matchit]]

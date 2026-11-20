@@ -20,7 +20,6 @@ a host-side concern; nothing here talks to them.
 
 | Crate | Description |
 | --- | --- |
-| [`omnia-http-cache`](crates/http-cache) | `HttpCache`, an outbound HTTP cache over an `omnia:keyvalue` bucket. Requests carrying `Cache-Control` and `If-None-Match` are answered from, and written back through, the bucket. |
 | [`omnia-orm`](crates/orm) | `entity!` mapping and typed `SELECT` / `INSERT` / `UPDATE` / `DELETE` builders that render parameterized SQL for an `omnia:sql` database to execute. |
 
 ## Quick start
@@ -29,22 +28,8 @@ Tasks run through [mise](https://mise.jdx.dev/getting-started.html), which
 must be installed by hand; `make <task>` is a pass-through to
 `mise run <task>` and fails, rather than installing it, when it is missing.
 
-Build the HTTP cache example guest and run it with the example host.
-`UPSTREAM_URL` is read from the runtime environment via `wasi:config`; any
-origin that answers `GET /resource` will do:
-
-```shell
-make build http-cache
-UPSTREAM_URL=https://jsonplaceholder.cypress.io/posts/1 make run http-cache
-```
-
-`GET /cached` fetches `{UPSTREAM_URL}/resource` through `HttpCache`. The
-first call reaches the origin and is stored for 300 seconds; the second is
-served from the store. See [`examples/http-cache/README.md`](examples/http-cache/README.md)
-and the crate [header contract](crates/http-cache/README.md).
-
-The ORM example is a two-table CRUD service over the runtime's in-memory
-`SQLite`:
+Build the ORM example guest and run it with the example host. It is a
+two-table CRUD service over the runtime's in-memory `SQLite`:
 
 ```shell
 make build orm
@@ -64,35 +49,16 @@ mise run test              # cargo nextest run --workspace --all-features --lock
 
 The suite is laid out as omnia's rungs (see omnia's
 [Testing Omnia-Based Code](https://github.com/augentic/omnia/blob/main/docs/guides/testing-omnia-code.md)
-guide) plus a build gate for the example hosts. Everything runs under
+guide) plus a build gate for the example host. Everything runs under
 `mise run test`: nothing is `#[ignore]`d, and nothing needs installing
 beyond `rust-toolchain.toml`, which carries the `wasm32-wasip3` target the
 guests compile for.
 
 ### Component rung
 
-`crates/http-cache/tests/cache.rs` boots the guest programs under
-`crates/test-programs/programs/http_cache`, compiled to `wasm32-wasip3`
-components by that crate's `build.rs`, through omnia's runtime over
-`omnia_test::host::Backends`. The origin is a `MatchedHttp`. The keyvalue
-store refuses a key that is not portable, and fails every call on its
-`broken` bucket. The guest asserts the responses it sees, and the suite
-asserts what reached the origin and what the bucket kept. Scenarios cover
-miss-then-hit, `no-cache` refresh (with `max-age`) and bypass (without),
-`max-age=0` revalidation, `no-store` bypass, non-2xx and 206 not stored, a corrupt
-entry and a store outage both degrading to the origin, an entity-tag that is
-no portable key cached over a store that refuses such keys, pass-through
-without `Cache-Control` or with only unrecognised directives, and malformed
-directives.
-
-`examples/tests/component.rs` boots the HTTP cache example guest — compiled
-to a `wasm32-wasip3` component by `examples/build.rs` — through the example
-host's own `runtime!` wiring over `omnia_test::host::Backends`. A loopback
-origin records hits; one scenario, `cached_miss_then_hit`, asserts both
-handler responses, a single origin fetch, and the keyvalue envelope under
-the etag's `store_key`.
-
-`examples/tests/orm.rs` boots the ORM example guest the same way, over the
+`examples/tests/orm.rs` boots the ORM example guest — compiled to a
+`wasm32-wasip3` component by `examples/build.rs` — through the example
+host's own `runtime!` wiring over `omnia_test::host::Backends`, with the
 bundle's private in-memory `SQLite`. One scenario, `agency_feed_lifecycle`,
 chains the routes in-process: create an agency, list and update it, add a
 feed, read the feed back through the JOIN entity carrying the updated agency
@@ -113,10 +79,9 @@ integer refusing to build.
 ### Examples gate
 
 `examples/tests/examples.rs::build` runs `cargo build --locked --examples`
-from the package root, so both example hosts compile. The hosts in
-`examples/http-cache/runtime.rs` and `examples/orm/runtime.rs` are servers
-that never exit, so they are compiled, not run; the component rung is where
-their wiring is exercised.
+from the package root, so the example host compiles. The host in
+`examples/orm/runtime.rs` is a server that never exits, so it is compiled,
+not run; the component rung is where its wiring is exercised.
 
 ## Development
 
@@ -126,7 +91,7 @@ mise run check  # local advisories: audit, fmt (in place), lint, outdated, deps
 ```
 
 `mise run ci` is the whole gate and runs exactly the jobs of the CI workflow:
-every rung above, including both component rungs and the examples gate, runs
+every rung above, including the component rung and the examples gate, runs
 inside `mise run test`. `mise tasks` lists everything else; the generic Rust
 tasks are included from
 [`augentic/toolkit`](https://github.com/augentic/toolkit/blob/main/mise/rust.toml)

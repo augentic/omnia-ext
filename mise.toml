@@ -35,7 +35,7 @@ ws="${ws%/Cargo.toml}"
 shift
 
 # A set `RUST_LOG` takes over; otherwise show the extension crates at debug.
-export RUST_LOG="${RUST_LOG:-info,opentelemetry_sdk=off,omnia_wasi_http=debug,omnia_http_cache=debug,omnia_wasi_sql=debug,omnia_orm=debug,${module}=debug}"
+export RUST_LOG="${RUST_LOG:-info,opentelemetry_sdk=off,omnia_wasi_http=debug,omnia_wasi_sql=debug,omnia_orm=debug,${module}=debug}"
 
 cargo run -p examples --example "$name" -- \
   run "${CARGO_TARGET_DIR:-$ws/target}/wasm32-wasip3/debug/examples/${module}_wasm.wasm" -- "$@"
