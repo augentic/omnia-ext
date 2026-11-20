@@ -369,15 +369,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "clap_complete"
-version = "4.6.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a35200383f20018d41c14d1ab19c1727c697f544492143f7d93aa39f0187848"
-dependencies = [
- "clap",
-]
-
-[[package]]
 name = "clap_derive"
 version = "4.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1031,22 +1022,16 @@ dependencies = [
  "chrono",
  "http",
  "http-body-util",
- "hyper",
- "hyper-util",
  "omnia",
- "omnia-http-cache",
  "omnia-orm",
  "omnia-sdk",
  "omnia-test",
- "omnia-wasi-config",
  "omnia-wasi-http",
- "omnia-wasi-keyvalue",
  "omnia-wasi-otel",
  "omnia-wasi-sql",
  "serde",
  "serde_json",
  "tokio",
- "tracing",
 ]
 
 [[package]]
@@ -2194,27 +2179,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "omnia-http-cache"
-version = "0.36.0"
-dependencies = [
- "anyhow",
- "bytes",
- "http",
- "omnia",
- "omnia-sdk",
- "omnia-test",
- "omnia-wasi-http",
- "omnia-wasi-keyvalue",
- "omnia-wasi-otel",
- "serde",
- "serde_json",
- "sha2 0.11.1",
- "test-programs",
- "tokio",
- "tracing",
-]
-
-[[package]]
 name = "omnia-link"
 version = "0.38.0"
 source = "git+https://github.com/augentic/omnia#fd8e0bc02d65d6c90fcee54e5d3374ef216a300c"
@@ -2263,8 +2227,6 @@ dependencies = [
  "axum",
  "bon",
  "bytes",
- "clap",
- "clap_complete",
  "futures",
  "getrandom 0.4.3",
  "http",
@@ -3796,17 +3758,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06794f8f6c5c898b3275aebefa6b8a1cb24cd2c6c79397ab15774837a0bc5755"
 dependencies = [
  "winapi-util",
-]
-
-[[package]]
-name = "test-programs"
-version = "0.36.0"
-dependencies = [
- "bytes",
- "http",
- "omnia-http-cache",
- "omnia-sdk",
- "omnia-test",
 ]
 
 [[package]]

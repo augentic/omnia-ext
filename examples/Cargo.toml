@@ -7,37 +7,28 @@ version.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 omnia.workspace = true
-omnia-wasi-config.workspace = true
 omnia-wasi-http.workspace = true
-omnia-wasi-keyvalue.workspace = true
 omnia-wasi-otel.workspace = true
 omnia-wasi-sql.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 anyhow.workspace = true
 axum.workspace = true
-bytes.workspace = true
 chrono.workspace = true
-http.workspace = true
-omnia-http-cache.workspace = true
 omnia-orm.workspace = true
 omnia-sdk = { workspace = true, features = ["http"] }
 serde.workspace = true
 serde_json.workspace = true
-tracing.workspace = true
 
-# The component rung (`tests/component.rs`, `tests/orm.rs`): the example
-# runtimes booted in-process over `omnia_test::host::Backends`.
+# The component rung (`tests/orm.rs`): the example runtime booted in-process
+# over `omnia_test::host::Backends`.
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 bytes.workspace = true
 http.workspace = true
 http-body-util.workspace = true
-hyper = { workspace = true, features = ["http1", "server"] }
-hyper-util = { workspace = true, features = ["tokio"] }
-omnia-http-cache.workspace = true
 omnia-test = { workspace = true, features = ["host"] }
 serde_json.workspace = true
-tokio = { workspace = true, features = ["macros", "net", "rt"] }
+tokio = { workspace = true, features = ["macros", "rt"] }
 
 # The fixture rung: `build.rs` compiles the example guest to a
 # `wasm32-wasip3` component for the tests to boot.
@@ -45,15 +36,6 @@ tokio = { workspace = true, features = ["macros", "net", "rt"] }
 omnia-test = { workspace = true, features = ["build"] }
 
 [lints]
-
-[[example]]
-name = "http-cache-wasm"
-path = "http-cache/guest.rs"
-crate-type = ["cdylib"]
-
-[[example]]
-name = "http-cache"
-path = "http-cache/runtime.rs"
 
 [[example]]
 name = "orm-wasm"

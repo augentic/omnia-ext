@@ -46,44 +46,33 @@ bytes = "1.12.2"
 chrono = "0.4.45"
 http = "1.5.0"
 http-body-util = "0.1.5"
-hyper = "1.12.0"
-hyper-util = "0.1.21"
 sea-query = { version = "1.0.2", default-features = false, features = ["thread-safe", "with-chrono"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
-sha2 = { version = "0.11.1", default-features = false }
 tokio = { version = "1.54.1", default-features = false }
 tracing = "0.1.44"
 
 omnia = "0.38.0"
 omnia-sdk = { version = "0.38.0", default-features = false }
 omnia-test = { version = "0.38.0", default-features = false }
-omnia-wasi-config = "0.38.0"
 omnia-wasi-http = "0.38.0"
-omnia-wasi-keyvalue = "0.38.0"
 omnia-wasi-otel = "0.38.0"
 omnia-wasi-sql = "0.38.0"
 
-omnia-http-cache = { path = "crates/http-cache", version = "0.36.0" }
 omnia-orm = { path = "crates/orm", version = "0.36.0" }
-test-programs = { path = "crates/test-programs" }
 
 [patch.crates-io]
 omnia = { git = "https://github.com/augentic/omnia" }
 omnia-sdk = { git = "https://github.com/augentic/omnia" }
 omnia-test = { git = "https://github.com/augentic/omnia" }
-omnia-wasi-config = { git = "https://github.com/augentic/omnia" }
 omnia-wasi-http = { git = "https://github.com/augentic/omnia" }
-omnia-wasi-keyvalue = { git = "https://github.com/augentic/omnia" }
 omnia-wasi-otel = { git = "https://github.com/augentic/omnia" }
 omnia-wasi-sql = { git = "https://github.com/augentic/omnia" }
 
 # omnia = { path = "../omnia/crates/omnia" }
 # omnia-sdk = { path = "../omnia/crates/sdk" }
 # omnia-test = { path = "../omnia/crates/test" }
-# omnia-wasi-config = { path = "../omnia/crates/wasi-config" }
 # omnia-wasi-http = { path = "../omnia/crates/wasi-http" }
-# omnia-wasi-keyvalue = { path = "../omnia/crates/wasi-keyvalue" }
 # omnia-wasi-otel = { path = "../omnia/crates/wasi-otel" }
 # omnia-wasi-sql = { path = "../omnia/crates/wasi-sql" }
 
